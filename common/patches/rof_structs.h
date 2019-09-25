@@ -128,8 +128,7 @@ static const uint32 MAX_NUMBER_GUILDS = 1500;
 
 // Used primarily in the Player Profile:
 static const uint32 MAX_PP_LANGUAGE		= 32;	// was 25
-static const uint32 MAX_PP_SPELLBOOK	= 720;	// was 480
-static const uint32 MAX_PP_MEMSPELL		= 16;	// was 12
+
 static const uint32 MAX_PP_SKILL		= PACKET_SKILL_ARRAY_SIZE;	// 100 - actual skills buffer size
 static const uint32 MAX_PP_INNATE_SKILL	= 25;
 static const uint32 MAX_PP_AA_ARRAY		= 300;
@@ -588,9 +587,9 @@ struct NewZone_Struct {
 /*0893*/	uint8	unknown893;		// Seen 0 - 00
 /*0894*/	uint8	fall_damage;	// 0 = Fall Damage on, 1 = Fall Damage off
 /*0895*/	uint8	unknown895;		// Seen 0 - 00
-/*0896*/	uint32	unknown896;		// Seen 180
-/*0900*/	uint32	unknown900;		// Seen 180
-/*0904*/	uint32	unknown904;		// Seen 180
+/*0896*/	uint32	FastRegenHP;		// Seen 180
+/*0900*/	uint32	FastRegenMana;		// Seen 180
+/*0904*/	uint32	FastRegenEndurance;		// Seen 180
 /*0908*/	uint32	unknown908;		// Seen 2
 /*0912*/	uint32	unknown912;		// Seen 2
 /*0916*/	float	FogDensity;		// Most zones have this set to 0.33 Blightfire had 0.16
@@ -1108,9 +1107,9 @@ union
 /*06092*/ uint32 timestamp2_count;				// Seen 100
 /*06096*/ uint32 timestamps2[100];				// Unknown Unix Timestamps - maybe Skill related?
 /*06496*/ uint32 spell_book_count;				// Seen 720
-/*06500*/ uint32 spell_book[MAX_PP_SPELLBOOK];	// List of the Spells in spellbook 720 = 90 pages [2880 bytes]
+/*06500*/ uint32 spell_book[spells::SPELLBOOK_SIZE];	// List of the Spells in spellbook 720 = 90 pages [2880 bytes]
 /*09380*/ uint32 mem_spell_count;				// Seen 16
-/*09384*/ int32 mem_spells[MAX_PP_MEMSPELL];	// [16] List of spells memorized - First 12 are set or -1 and last 4 are 0s
+/*09384*/ int32 mem_spells[spells::SPELL_GEM_COUNT];	// [16] List of spells memorized - First 12 are set or -1 and last 4 are 0s
 /*09448*/ uint32 unknown16_count;				// Seen 13
 /*09452*/ uint32 unknown_rof16[13];				// Possibly spell or buff related
 /*09504*/ uint8 unknown_rof17;					// Seen 0 or 8

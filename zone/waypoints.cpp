@@ -24,12 +24,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "../common/rulesys.h"
 #include "../common/string_util.h"
 #include "../common/misc_functions.h"
+#include "../common/eqemu_logsys.h"
 
 #include "map.h"
 #include "npc.h"
 #include "quest_parser_collection.h"
 #include "water_map.h"
 #include "fastmath.h"
+#include "mob_movement_manager.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -54,7 +56,16 @@ void NPC::AI_SetRoambox(float max_distance, float roam_distance_variance, uint32
 	);
 }
 
-void NPC::AI_SetRoambox(float distance, float max_x, float min_x, float max_y, float min_y, uint32 delay, uint32 min_delay) {
+void NPC::AI_SetRoambox(
+	float distance,
+	float max_x,
+	float min_x,
+	float max_y,
+	float min_y,
+	uint32 delay,
+	uint32 min_delay
+)
+{
 	roambox_distance      = distance;
 	roambox_max_x         = max_x;
 	roambox_min_x         = min_x;
@@ -67,18 +78,18 @@ void NPC::AI_SetRoambox(float distance, float max_x, float min_x, float max_y, f
 
 void NPC::DisplayWaypointInfo(Client *c) {
 
-	c->Message(0, "Mob is on grid %d, in spawn group %d, on waypoint %d/%d",
-		GetGrid(),
-		GetSp2(),
-		GetCurWp(),
-		GetMaxWp());
+	c->Message(Chat::White, "Mob is on grid %d, in spawn group %d, on waypoint %d/%d",
+			   GetGrid(),
+			   GetSpawnGroupId(),
+			   GetCurWp(),
+			   GetMaxWp());
 
 
 	std::vector<wplist>::iterator cur, end;
 	cur = Waypoints.begin();
 	end = Waypoints.end();
 	for (; cur != end; ++cur) {
-		c->Message(0, "Waypoint %d: (%.2f,%.2f,%.2f,%.2f) pause %d",
+		c->Message(Chat::White, "Waypoint %d: (%.2f,%.2f,%.2f,%.2f) pause %d",
 			cur->index,
 			cur->x,
 			cur->y,
@@ -92,8 +103,8 @@ void NPC::StopWandering()
 {	// stops a mob from wandering, takes him off grid and sends him back to spawn point
 	roamer = false;
 	CastToNPC()->SetGrid(0);
-	SendPosition();
-	Log(Logs::Detail, Logs::Pathing, "Stop Wandering requested.");
+	StopNavigation();
+	LogPathing("Stop Wandering requested");
 	return;
 }
 
@@ -107,21 +118,21 @@ void NPC::ResumeWandering()
 		{	// we were paused by a quest
 			AI_walking_timer->Disable();
 			SetGrid(0 - GetGrid());
-			if (cur_wp == -1)
+			if (cur_wp == EQEmu::WaypointStatus::QuestControlGrid)
 			{	// got here by a MoveTo()
 				cur_wp = save_wp;
 				UpdateWaypoint(cur_wp);	// have him head to last destination from here
 			}
-			Log(Logs::Detail, Logs::Pathing, "Resume Wandering requested. Grid %d, wp %d", GetGrid(), cur_wp);
+			LogPathing("Resume Wandering requested. Grid [{}], wp [{}]", GetGrid(), cur_wp);
 		}
 		else if (AI_walking_timer->Enabled())
 		{	// we are at a waypoint paused normally
-			Log(Logs::Detail, Logs::Pathing, "Resume Wandering on timed pause. Grid %d, wp %d", GetGrid(), cur_wp);
+			LogPathing("Resume Wandering on timed pause. Grid [{}], wp [{}]", GetGrid(), cur_wp);
 			AI_walking_timer->Trigger();	// disable timer to end pause now
 		}
 		else
 		{
-			Log(Logs::General, Logs::Error, "NPC not paused - can't resume wandering: %lu", (unsigned long)GetNPCTypeID());
+			LogError("NPC not paused - can't resume wandering: [{}]", (unsigned long)GetNPCTypeID());
 			return;
 		}
 
@@ -136,7 +147,7 @@ void NPC::ResumeWandering()
 	}
 	else
 	{
-		Log(Logs::General, Logs::Error, "NPC not on grid - can't resume wandering: %lu", (unsigned long)GetNPCTypeID());
+		LogError("NPC not on grid - can't resume wandering: [{}]", (unsigned long)GetNPCTypeID());
 	}
 	return;
 }
@@ -148,8 +159,8 @@ void NPC::PauseWandering(int pausetime)
 	if (GetGrid() != 0) {
 		moving = false;
 		DistractedFromGrid = true;
-		Log(Logs::Detail, Logs::Pathing, "Paused Wandering requested. Grid %d. Resuming in %d ms (0=not until told)", GetGrid(), pausetime);
-		SendPosition();
+		LogPathing("Paused Wandering requested. Grid [{}]. Resuming in [{}] ms (0=not until told)", GetGrid(), pausetime);
+		StopNavigation();
 		if (pausetime < 1) {	// negative grid number stops him dead in his tracks until ResumeWandering()
 			SetGrid(0 - GetGrid());
 		}
@@ -158,34 +169,33 @@ void NPC::PauseWandering(int pausetime)
 		}
 	}
 	else {
-		Log(Logs::General, Logs::Error, "NPC not on grid - can't pause wandering: %lu", (unsigned long)GetNPCTypeID());
+		LogError("NPC not on grid - can't pause wandering: [{}]", (unsigned long)GetNPCTypeID());
 	}
 	return;
 }
 
-void NPC::MoveTo(const glm::vec4& position, bool saveguardspot)
-{	// makes mob walk to specified location
-	if (IsNPC() && GetGrid() != 0)
-	{	// he is on a grid
-		if (GetGrid() < 0)
-		{	// currently stopped by a quest command
-			SetGrid(0 - GetGrid());	// get him moving again
-			Log(Logs::Detail, Logs::AI, "MoveTo during quest wandering. Canceling quest wandering and going back to grid %d when MoveTo is done.", GetGrid());
+void NPC::MoveTo(const glm::vec4 &position, bool saveguardspot)
+{    // makes mob walk to specified location
+	if (IsNPC() && GetGrid() != 0) {    // he is on a grid
+		if (GetGrid() < 0) {    // currently stopped by a quest command
+			SetGrid(0 - GetGrid());    // get him moving again
+			LogAI("MoveTo during quest wandering. Canceling quest wandering and going back to grid [{}] when MoveTo is done", GetGrid());
 		}
-		AI_walking_timer->Disable();	// disable timer in case he is paused at a wp
-		if (cur_wp >= 0)
-		{	// we've not already done a MoveTo()
-			save_wp = cur_wp;	// save the current waypoint
-			cur_wp = -1;		// flag this move as quest controlled
+		AI_walking_timer->Disable();    // disable timer in case he is paused at a wp
+		if (cur_wp >= 0) {    // we've not already done a MoveTo()
+			save_wp = cur_wp;    // save the current waypoint
+			cur_wp  = EQEmu::WaypointStatus::QuestControlGrid;
 		}
-		Log(Logs::Detail, Logs::AI, "MoveTo %s, pausing regular grid wandering. Grid %d, save_wp %d", to_string(static_cast<glm::vec3>(position)).c_str(), -GetGrid(), save_wp);
+		LogAI("MoveTo [{}], pausing regular grid wandering. Grid [{}], save_wp [{}]",
+			to_string(static_cast<glm::vec3>(position)).c_str(),
+			-GetGrid(),
+			save_wp);
 	}
-	else
-	{	// not on a grid
-		roamer = true;
+	else {    // not on a grid
+		roamer  = true;
 		save_wp = 0;
-		cur_wp = -2;		// flag as quest controlled w/no grid
-		Log(Logs::Detail, Logs::AI, "MoveTo %s without a grid.", to_string(static_cast<glm::vec3>(position)).c_str());
+		cur_wp  = EQEmu::WaypointStatus::QuestControlNoGrid;
+		LogAI("MoveTo [{}] without a grid", to_string(static_cast<glm::vec3>(position)).c_str());
 	}
 
 	glm::vec3 dest(position);
@@ -193,29 +203,30 @@ void NPC::MoveTo(const glm::vec4& position, bool saveguardspot)
 	m_CurrentWayPoint = position;
 	m_CurrentWayPoint.z = GetFixedZ(dest);
 
-	if (saveguardspot)
-	{
+	if (saveguardspot) {
 		m_GuardPoint = m_CurrentWayPoint;
 
-		if (m_GuardPoint.w == 0)
-			m_GuardPoint.w = 0.0001;		//hack to make IsGuarding simpler
+		if (m_GuardPoint.w == 0) {
+			m_GuardPoint.w = 0.0001;
+		}        //hack to make IsGuarding simpler
 
 		if (m_GuardPoint.w == -1)
 			m_GuardPoint.w = this->CalculateHeadingToTarget(position.x, position.y);
 
-		Log(Logs::Detail, Logs::AI, "Setting guard position to %s", to_string(static_cast<glm::vec3>(m_GuardPoint)).c_str());
+		LogAI("Setting guard position to [{}]", to_string(static_cast<glm::vec3>(m_GuardPoint)).c_str());
 	}
 
-	cur_wp_pause = 0;
+	cur_wp_pause        = 0;
 	time_until_can_move = 0;
-	if (AI_walking_timer->Enabled())
+	if (AI_walking_timer->Enabled()) {
 		AI_walking_timer->Start(100);
+	}
 }
 
 void NPC::UpdateWaypoint(int wp_index)
 {
 	if (wp_index >= static_cast<int>(Waypoints.size())) {
-		Log(Logs::Detail, Logs::AI, "Update to waypoint %d failed. Not found.", wp_index);
+		LogAI("Update to waypoint [{}] failed. Not found", wp_index);
 		return;
 	}
 	std::vector<wplist>::iterator cur;
@@ -224,7 +235,7 @@ void NPC::UpdateWaypoint(int wp_index)
 
 	m_CurrentWayPoint = glm::vec4(cur->x, cur->y, cur->z, cur->heading);
 	cur_wp_pause = cur->pause;
-	Log(Logs::Detail, Logs::AI, "Next waypoint %d: (%.3f, %.3f, %.3f, %.3f)", wp_index, m_CurrentWayPoint.x, m_CurrentWayPoint.y, m_CurrentWayPoint.z, m_CurrentWayPoint.w);
+	LogAI("Next waypoint [{}]: ({}, {}, {}, {})", wp_index, m_CurrentWayPoint.x, m_CurrentWayPoint.y, m_CurrentWayPoint.z, m_CurrentWayPoint.w);
 
 }
 
@@ -332,8 +343,6 @@ void NPC::CalculateNewWaypoint()
 	}
 	}
 
-	tar_ndx = 52;
-
 	// Preserve waypoint setting for quest controlled NPCs
 	if (cur_wp < 0)
 		cur_wp = old_wp;
@@ -391,13 +400,8 @@ void NPC::SetWaypointPause()
 {
 	//Declare time to wait on current WP
 
-	if (cur_wp_pause == 0) {
-		AI_walking_timer->Start(100);
-		AI_walking_timer->Trigger();
-	}
-	else
+	if(cur_wp_pause > 0)
 	{
-
 		switch (pausetype)
 		{
 		case 0: //Random Half
@@ -413,31 +417,22 @@ void NPC::SetWaypointPause()
 	}
 }
 
-void NPC::SaveGuardSpot(bool iClearGuardSpot) {
-	if (iClearGuardSpot) {
-		Log(Logs::Detail, Logs::AI, "Clearing guard order.");
-		m_GuardPoint = glm::vec4();
-	}
-	else {
-		m_GuardPoint = m_Position;
+void NPC::SaveGuardSpot(const glm::vec4 &pos)
+{
+	m_GuardPoint = pos;
 
-		if (m_GuardPoint.w == 0)
-			m_GuardPoint.w = 0.0001;		//hack to make IsGuarding simpler
-		Log(Logs::Detail, Logs::AI, "Setting guard position to %s", to_string(static_cast<glm::vec3>(m_GuardPoint)).c_str());
-	}
+	if (m_GuardPoint.w == 0)
+		m_GuardPoint.w = 0.0001;		//hack to make IsGuarding simpler
+	LogAI("Setting guard position to {0}", to_string(static_cast<glm::vec3>(m_GuardPoint)));
 }
 
 void NPC::NextGuardPosition() {
-	if (!CalculateNewPosition(m_GuardPoint.x, m_GuardPoint.y, m_GuardPoint.z, GetMovespeed())) {
-		SetHeading(m_GuardPoint.w);
-		Log(Logs::Detail, Logs::AI, "Unable to move to next guard position. Probably rooted.");
-	}
-	else if ((m_Position.x == m_GuardPoint.x) && (m_Position.y == m_GuardPoint.y) && (m_Position.z == m_GuardPoint.z))
+	NavigateTo(m_GuardPoint.x, m_GuardPoint.y, m_GuardPoint.z);
+	if (IsPositionEqualWithinCertainZ(m_Position, m_GuardPoint, 5.0f))
 	{
 		if (moved)
 		{
 			moved = false;
-			SetCurrentSpeed(0);
 		}
 	}
 }
@@ -446,179 +441,48 @@ float Mob::CalculateDistance(float x, float y, float z) {
 	return (float)sqrtf(((m_Position.x - x)*(m_Position.x - x)) + ((m_Position.y - y)*(m_Position.y - y)) + ((m_Position.z - z)*(m_Position.z - z)));
 }
 
-bool Mob::MakeNewPositionAndSendUpdate(float x, float y, float z, float speed, bool check_z, bool calculate_heading) {
-	if (GetID() == 0)
-		return true;
-
-	if (speed <= 0) {
-		SetCurrentSpeed(0);
-		return true;
-	}
-
-	if ((m_Position.x - x == 0) && (m_Position.y - y == 0)) { //spawn is at target coords
-		return false;
-	}
-	else if ((std::abs(m_Position.x - x) < 0.1) && (std::abs(m_Position.y - y) < 0.1)) {
-		if (IsNPC()) {
-			entity_list.ProcessMove(CastToNPC(), x, y, z);
-		}
-
-		m_Position.x = x;
-		m_Position.y = y;
-		m_Position.z = z;
-
-		return true;
-	}
-
-	int compare_steps = 20;
-	if (tar_ndx < compare_steps && m_TargetLocation.x == x && m_TargetLocation.y == y) {
-
-		float new_x = m_Position.x + m_TargetV.x * tar_vector;
-		float new_y = m_Position.y + m_TargetV.y * tar_vector;
-		float new_z = m_Position.z + m_TargetV.z * tar_vector;
-
-		if (IsNPC()) {
-			entity_list.ProcessMove(CastToNPC(), new_x, new_y, new_z);
-		}
-
-		m_Position.x = new_x;
-		m_Position.y = new_y;
-		m_Position.z = new_z;
-
-		if (check_z && fix_z_timer.Check() && (!this->IsEngaged() || flee_mode || currently_fleeing)) {
-			this->FixZ();
-		}
-
-		tar_ndx++;
-
-		return true;
-	}
-
-	if (tar_ndx > 50) {
-		tar_ndx--;
-	}
-	else {
-		tar_ndx = 0;
-	}
-
-	m_TargetLocation = glm::vec3(x, y, z);
-
-	float nx = this->m_Position.x;
-	float ny = this->m_Position.y;
-	float nz = this->m_Position.z;
-	//	float nh = this->heading;
-
-	m_TargetV.x = x - nx;
-	m_TargetV.y = y - ny;
-	m_TargetV.z = z - nz;
-	SetCurrentSpeed((int8)speed);
-	pRunAnimSpeed = speed;
-#ifdef BOTS
-	if (IsClient() || IsBot())
-#else
-	if (IsClient())
-#endif
-	{
-		animation = speed / 2;
-	}
-
-	// --------------------------------------------------------------------------
-	// 2: get unit vector
-	// --------------------------------------------------------------------------
-	float mag = sqrtf(m_TargetV.x*m_TargetV.x + m_TargetV.y*m_TargetV.y + m_TargetV.z*m_TargetV.z);
-	tar_vector = (float)speed / mag;
-
-	// mob move fix
-	int numsteps = (int)(mag * 13.5f / (float)speed + 0.5f);
-
-
-	// mob move fix
-
-	if (numsteps < 20) {
-		if (numsteps > 1) {
-			tar_vector = 1.0f;
-			m_TargetV.x = m_TargetV.x / (float) numsteps;
-			m_TargetV.y = m_TargetV.y / (float) numsteps;
-			m_TargetV.z = m_TargetV.z / (float) numsteps;
-
-			float new_x = m_Position.x + m_TargetV.x;
-			float new_y = m_Position.y + m_TargetV.y;
-			float new_z = m_Position.z + m_TargetV.z;
-			if (IsNPC()) {
-				entity_list.ProcessMove(CastToNPC(), new_x, new_y, new_z);
-			}
-
-			m_Position.x = new_x;
-			m_Position.y = new_y;
-			m_Position.z = new_z;
-			if (calculate_heading) {
-				m_Position.w = CalculateHeadingToTarget(x, y);
-			}
-			tar_ndx = 20 - numsteps;
-		}
-		else {
-			if (IsNPC()) {
-				entity_list.ProcessMove(CastToNPC(), x, y, z);
-			}
-
-			m_Position.x = x;
-			m_Position.y = y;
-			m_Position.z = z;
-		}
-	}
-
-	else {
-		tar_vector /= 13.5f;
-		float dur = Timer::GetCurrentTime() - pLastChange;
-		if (dur < 0.0f) {
-			dur = 0.0f;
-		}
-
-		if (dur > 100.f) {
-			dur = 100.f;
-		}
-
-		tar_vector *= (dur / 100.0f);
-
-		float new_x = m_Position.x + m_TargetV.x * tar_vector;
-		float new_y = m_Position.y + m_TargetV.y * tar_vector;
-		float new_z = m_Position.z + m_TargetV.z * tar_vector;
-
-		if (IsNPC()) {
-			entity_list.ProcessMove(CastToNPC(), new_x, new_y, new_z);
-		}
-
-		m_Position.x = new_x;
-		m_Position.y = new_y;
-		m_Position.z = new_z;
-		if (calculate_heading) {
-			m_Position.w = CalculateHeadingToTarget(x, y);
-		}
-	}
-
-	if (check_z && fix_z_timer.Check() && !this->IsEngaged())
-		this->FixZ();
-
-	SetMoving(true);
-	moved = true;
-
-	m_Delta = glm::vec4(m_Position.x - nx, m_Position.y - ny, m_Position.z - nz, 0.0f);
-
-	if (IsClient()) {
-		SendPositionUpdate(1);
-		CastToClient()->ResetPositionTimer();
-	}
-	else {
-		SendPositionUpdate();
-		SetAppearance(eaStanding, false);
-	}
-
-	pLastChange = Timer::GetCurrentTime();
-	return true;
+void Mob::WalkTo(float x, float y, float z)
+{
+	mMovementManager->NavigateTo(this, x, y, z, MovementWalking);
 }
 
-bool Mob::CalculateNewPosition(float x, float y, float z, float speed, bool check_z, bool calculate_heading) {
-	return MakeNewPositionAndSendUpdate(x, y, z, speed, check_z);
+void Mob::RunTo(float x, float y, float z)
+{
+	mMovementManager->NavigateTo(this, x, y, z, MovementRunning);
+}
+
+void Mob::NavigateTo(float x, float y, float z)
+{
+	if (IsRunning()) {
+		RunTo(x, y, z);
+	}
+	else {
+		WalkTo(x, y, z);
+	}
+}
+
+void Mob::RotateTo(float new_heading)
+{
+	if (IsRunning()) {
+		RotateToRunning(new_heading);
+	}
+	else {
+		RotateToWalking(new_heading);
+	}
+}
+
+void Mob::RotateToWalking(float new_heading)
+{
+	mMovementManager->RotateTo(this, new_heading, MovementWalking);
+}
+
+void Mob::RotateToRunning(float new_heading)
+{
+	mMovementManager->RotateTo(this, new_heading, MovementRunning);
+}
+
+void Mob::StopNavigation() {
+	mMovementManager->StopNavigation(this);
 }
 
 void NPC::AssignWaypoints(int32 grid)
@@ -683,9 +547,6 @@ void NPC::AssignWaypoints(int32 grid)
 
 	if (wandertype == 1 || wandertype == 2 || wandertype == 5)
 		CalculateNewWaypoint();
-
-	if (wandertype == 1 || wandertype == 2 || wandertype == 5)
-		CalculateNewWaypoint();
 }
 
 void Mob::SendTo(float new_x, float new_y, float new_z) {
@@ -696,9 +557,9 @@ void Mob::SendTo(float new_x, float new_y, float new_z) {
 	m_Position.x = new_x;
 	m_Position.y = new_y;
 	m_Position.z = new_z;
-	Log(Logs::Detail, Logs::AI, "Sent To (%.3f, %.3f, %.3f)", new_x, new_y, new_z);
+	LogAI("Sent To ({}, {}, {})", new_x, new_y, new_z);
 
-	if (flymode == FlyMode1)
+	if (flymode == GravityBehavior::Flying)
 		return;
 
 	//fix up pathing Z, this shouldent be needed IF our waypoints
@@ -712,7 +573,7 @@ void Mob::SendTo(float new_x, float new_y, float new_z) {
 
 			float newz = zone->zonemap->FindBestZ(dest, nullptr);
 
-			Log(Logs::Detail, Logs::AI, "BestZ returned %4.3f at %4.3f, %4.3f, %4.3f", newz, m_Position.x, m_Position.y, m_Position.z);
+			LogAI("BestZ returned {} at {}, {}, {}", newz, m_Position.x, m_Position.y, m_Position.z);
 
 			if ((newz > -2000) && std::abs(newz - dest.z) < RuleR(Map, FixPathingZMaxDeltaSendTo)) // Sanity check.
 				m_Position.z = newz + 1;
@@ -740,7 +601,7 @@ void Mob::SendToFixZ(float new_x, float new_y, float new_z) {
 
 			float newz = zone->zonemap->FindBestZ(dest, nullptr);
 
-			Log(Logs::Moderate, Logs::Pathing, "BestZ returned %4.3f at %4.3f, %4.3f, %4.3f", newz, m_Position.x, m_Position.y, m_Position.z);
+			LogPathing("BestZ returned [{}] at [{}], [{}], [{}]", newz, m_Position.x, m_Position.y, m_Position.z);
 
 			if ((newz > -2000) && std::abs(newz - dest.z) < RuleR(Map, FixPathingZMaxDeltaSendTo)) // Sanity check.
 				m_Position.z = newz + 1;
@@ -748,21 +609,18 @@ void Mob::SendToFixZ(float new_x, float new_y, float new_z) {
 	}
 }
 
-float Mob::GetFixedZ(glm::vec3 destination, int32 z_find_offset) {
+float Mob::GetFixedZ(const glm::vec3 &destination, int32 z_find_offset) {
 	BenchTimer timer;
 	timer.reset();
 
 	float new_z = destination.z;
 
-	if (zone->HasMap() && RuleB(Map, FixZWhenMoving)) {
+	if (zone->HasMap()) {
 
-		if (flymode == 1 || flymode == 2)
+		if (flymode == GravityBehavior::Flying)
 			return new_z;
 
-		if (this->IsBoat())
-			return new_z;
-
-		if (zone->HasWaterMap() && zone->watermap->InWater(glm::vec3(m_Position)))
+		if (zone->HasWaterMap() && zone->watermap->InLiquid(glm::vec3(m_Position)))
 			return new_z;
 
 		/*
@@ -779,9 +637,7 @@ float Mob::GetFixedZ(glm::vec3 destination, int32 z_find_offset) {
 
 		auto duration = timer.elapsed();
 
-		Log(Logs::Moderate,
-			Logs::FixZ,
-			"Mob::GetFixedZ() (%s) returned %4.3f at %4.3f, %4.3f, %4.3f - Took %lf",
+		LogFixZ("Mob::GetFixedZ() ([{}]) returned [{}] at [{}], [{}], [{}] - Took [{}]",
 			this->GetCleanName(),
 			new_z,
 			destination.x,
@@ -793,26 +649,38 @@ float Mob::GetFixedZ(glm::vec3 destination, int32 z_find_offset) {
 	return new_z;
 }
 
-void Mob::FixZ(int32 z_find_offset /*= 5*/) {
+void Mob::FixZ(int32 z_find_offset /*= 5*/, bool fix_client_z /*= false*/) {
+	if (IsClient() && !fix_client_z) {
+		return;
+	}
+	
+	if (flymode == GravityBehavior::Flying) {
+		return;
+	}
+
+	if (zone->watermap && zone->watermap->InLiquid(m_Position)) {
+		return;
+	}
+
 	glm::vec3 current_loc(m_Position);
-	float     new_z = GetFixedZ(current_loc, z_find_offset);
+	float new_z = GetFixedZ(current_loc, z_find_offset);
 
-	if (!IsClient() && new_z != m_Position.z) {
-		if ((new_z > -2000) && new_z != BEST_Z_INVALID) {
-			if (RuleB(Map, MobZVisualDebug)) {
-				this->SendAppearanceEffect(78, 0, 0, 0, 0);
-			}
+	if (new_z == m_Position.z)
+		return;
 
-			m_Position.z = new_z;
+	if ((new_z > -2000) && new_z != BEST_Z_INVALID) {
+		if (RuleB(Map, MobZVisualDebug)) {
+			this->SendAppearanceEffect(78, 0, 0, 0, 0);
 		}
-		else {
-			if (RuleB(Map, MobZVisualDebug)) {
-				this->SendAppearanceEffect(103, 0, 0, 0, 0);
-			}
 
-			Log(Logs::General, Logs::FixZ, "%s is failing to find Z %f",
-				this->GetCleanName(), std::abs(m_Position.z - new_z));
+		m_Position.z = new_z;
+	}
+	else {
+		if (RuleB(Map, MobZVisualDebug)) {
+			this->SendAppearanceEffect(103, 0, 0, 0, 0);
 		}
+
+		LogFixZ("[{}] is failing to find Z [{}]", this->GetCleanName(), std::abs(m_Position.z - new_z));
 	}
 }
 
@@ -950,8 +818,6 @@ void Mob::TryMoveAlong(float distance, float angle, bool send)
 
 	new_pos.z = GetFixedZ(new_pos);
 	Teleport(new_pos);
-	if (send)
-		SendPositionUpdate();
 }
 
 int	ZoneDatabase::GetHighestGrid(uint32 zoneid) {
@@ -1023,7 +889,7 @@ void ZoneDatabase::AssignGrid(Client *client, int grid, int spawn2id) {
 		return;
 	}
 
-	client->Message(0, "Grid assign: spawn2 id = %d updated", spawn2id);
+	client->Message(Chat::White, "Grid assign: spawn2 id = %d updated", spawn2id);
 }
 
 
@@ -1201,3 +1067,26 @@ void NPC::RestoreGuardSpotCharm()
 {
 	m_GuardPoint = m_GuardPointSaved;
 }
+
+/******************
+* Bot-specific overloads to make them play nice with the new movement system
+*/
+#ifdef BOTS
+#include "bot.h"
+
+void Bot::WalkTo(float x, float y, float z)
+{
+	if (IsSitting())
+		Stand();
+
+	Mob::WalkTo(x, y, z);
+}
+
+void Bot::RunTo(float x, float y, float z)
+{
+	if (IsSitting())
+		Stand();
+
+	Mob::RunTo(x, y, z);
+}
+#endif

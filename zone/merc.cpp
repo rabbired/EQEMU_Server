@@ -29,7 +29,7 @@ extern volatile bool is_zone_loaded;
 #endif
 
 Merc::Merc(const NPCType* d, float x, float y, float z, float heading)
-: NPC(d, nullptr, glm::vec4(x, y, z, heading), 0, false), endupkeep_timer(1000), rest_timer(1), confidence_timer(6000), check_target_timer(2000)
+: NPC(d, nullptr, glm::vec4(x, y, z, heading), GravityBehavior::Water, false), endupkeep_timer(1000), rest_timer(1), confidence_timer(6000), check_target_timer(2000)
 {
 	base_hp = d->max_hp;
 	base_mana = d->Mana;
@@ -66,7 +66,7 @@ Merc::Merc(const NPCType* d, float x, float y, float z, float heading)
 	memset(equipment, 0, sizeof(equipment));
 
 	SetMercID(0);
-	SetStance(MercStanceBalanced);
+	SetStance(EQEmu::constants::stanceBalanced);
 	rest_timer.Disable();
 
 	if (GetClass() == ROGUE)
@@ -217,21 +217,15 @@ void Merc::CalcItemBonuses(StatBonuses* newbon) {
 
 	unsigned int i;
 	//should not include 21 (SLOT_AMMO)
-	for (i = 0; i < EQEmu::invslot::slotAmmo; i++) {
-		if(equipment[i] == 0)
+	for (i = EQEmu::invslot::BONUS_BEGIN; i <= EQEmu::invslot::BONUS_STAT_END; i++) {
+		if (i == EQEmu::invslot::slotAmmo)
+			continue;
+		if (equipment[i] == 0)
 			continue;
 		const EQEmu::ItemData * itm = database.GetItem(equipment[i]);
-		if(itm)
+		if (itm)
 			AddItemBonuses(itm, newbon);
 	}
-
-	//Power Source Slot
-	/*if (GetClientVersion() >= EQClientSoF)
-	{
-	const EQEmu::ItemInstance* inst = m_inv[MainPowerSource];
-	if(inst)
-	AddItemBonuses(inst, newbon);
-	}*/
 
 	// Caps
 	if(newbon->HPRegen > CalcHPRegenCap())
@@ -865,14 +859,14 @@ int32 Merc::CalcMaxHP() {
 
 	max_hp += max_hp * ((spellbonuses.MaxHPChange + itembonuses.MaxHPChange) / 10000.0f);
 
-	if (cur_hp > max_hp)
-		cur_hp = max_hp;
+	if (current_hp > max_hp)
+		current_hp = max_hp;
 
 	int hp_perc_cap = spellbonuses.HPPercCap[0];
 	if(hp_perc_cap) {
 		int curHP_cap = (max_hp * hp_perc_cap) / 100;
-		if (cur_hp > curHP_cap || (spellbonuses.HPPercCap[1] && cur_hp > spellbonuses.HPPercCap[1]))
-			cur_hp = curHP_cap;
+		if (current_hp > curHP_cap || (spellbonuses.HPPercCap[1] && current_hp > spellbonuses.HPPercCap[1]))
+			current_hp = curHP_cap;
 	}
 
 	return max_hp;
@@ -897,7 +891,7 @@ int32 Merc::CalcMaxMana()
 		break;
 			  }
 	default: {
-		Log(Logs::General, Logs::None, "Invalid Class '%c' in CalcMaxMana", GetCasterClass());
+		LogDebug("Invalid Class [{}] in CalcMaxMana", GetCasterClass());
 		max_mana = 0;
 		break;
 			 }
@@ -918,7 +912,7 @@ int32 Merc::CalcMaxMana()
 	}
 
 #if EQDEBUG >= 11
-	Log(Logs::General, Logs::None, "Merc::CalcMaxMana() called for %s - returning %d", GetName(), max_mana);
+	LogDebug("Merc::CalcMaxMana() called for [{}] - returning [{}]", GetName(), max_mana);
 #endif
 	return max_mana;
 }
@@ -1174,11 +1168,11 @@ void Merc::CalcRestState() {
 		}
 	}
 
-	RestRegenHP = 6 * (GetMaxHP() / RuleI(Character, RestRegenHP));
+	RestRegenHP = 6 * (GetMaxHP() / zone->newzone_data.FastRegenHP);
 
-	RestRegenMana = 6 * (GetMaxMana() / RuleI(Character, RestRegenMana));
+	RestRegenMana = 6 * (GetMaxMana() / zone->newzone_data.FastRegenMana);
 
-	RestRegenEndurance = 6 * (GetMaxEndurance() / RuleI(Character, RestRegenEnd));
+	RestRegenEndurance = 6 * (GetMaxEndurance() / zone->newzone_data.FastRegenEndurance);
 }
 
 bool Merc::HasSkill(EQEmu::skills::SkillType skill_id) const {
@@ -1277,7 +1271,7 @@ bool Merc::Process()
 		//6 seconds, or whatever the rule is set to has passed, send this position to everyone to avoid ghosting
 		if(!IsMoving() && !IsEngaged())
 		{
-			SendPosition();
+			SentPositionPacket(0.0f, 0.0f, 0.0f, 0.0f, 0);
 			if(IsSitting()) {
 				if(!rest_timer.Enabled()) {
 					rest_timer.Start(RuleI(Character, RestRegenTimeToActivate) * 1000);
@@ -1414,7 +1408,7 @@ void Merc::AI_Process() {
 		if(DivineAura())
 			return;
 
-		int hateCount = entity_list.GetHatedCount(this, nullptr);
+		int hateCount = entity_list.GetHatedCount(this, nullptr, false);
 		if(GetHatedCount() < hateCount) {
 			SetHatedCount(hateCount);
 
@@ -1471,35 +1465,15 @@ void Merc::AI_Process() {
 
 				if(moved) {
 					moved = false;
-					SetCurrentSpeed(0);
+					StopNavigation();
 				}
 			}
 
 			return;
 		}
 		else if (!CheckLosFN(GetTarget())) {
-			if (RuleB(Mercs, MercsUsePathing) && zone->pathing) {
-				bool WaypointChanged, NodeReached;
-
-				glm::vec3 Goal = UpdatePath(
-					GetTarget()->GetX(),
-					GetTarget()->GetY(),
-					GetTarget()->GetZ(),
-					GetRunspeed(),
-					WaypointChanged,
-					NodeReached
-				);
-
-				if (WaypointChanged)
-					tar_ndx = 20;
-
-				CalculateNewPosition(Goal.x, Goal.y, Goal.z, GetRunspeed());
-			}
-			else {
-				Mob* follow = entity_list.GetMob(GetFollowID());
-				if (follow)
-					CalculateNewPosition(follow->GetX(), follow->GetY(), follow->GetZ(), GetRunspeed());
-			}
+			auto Goal = GetTarget()->GetPosition();
+			RunTo(Goal.x, Goal.y, Goal.z);
 
 			return;
 		}
@@ -1533,7 +1507,7 @@ void Merc::AI_Process() {
 				SetRunAnimSpeed(0);
 
 				if(moved) {
-					SetCurrentSpeed(0);
+					StopNavigation();
 				}
 			}
 
@@ -1565,7 +1539,7 @@ void Merc::AI_Process() {
 									float newZ = 0;
 									FaceTarget(GetTarget());
 									if (PlotPositionAroundTarget(this, newX, newY, newZ)) {
-										CalculateNewPosition(newX, newY, newZ, GetRunspeed());
+										RunTo(newX, newY, newZ);
 										return;
 									}
 								}
@@ -1577,7 +1551,7 @@ void Merc::AI_Process() {
 							float newY = 0;
 							float newZ = 0;
 							if (PlotPositionAroundTarget(GetTarget(), newX, newY, newZ)) {
-								CalculateNewPosition(newX, newY, newZ, GetRunspeed());
+								RunTo(newX, newY, newZ);
 								return;
 							}
 						}
@@ -1588,16 +1562,16 @@ void Merc::AI_Process() {
 						float newY = 0;
 						float newZ = 0;
 						if (PlotPositionAroundTarget(GetTarget(), newX, newY, newZ, false) && GetArchetype() != ARCHETYPE_CASTER) {
-							CalculateNewPosition(newX, newY, newZ, GetRunspeed());
+							RunTo(newX, newY, newZ);
 							return;
 						}
 					}
 				}
 
-				if (IsMoving())
-					SendPositionUpdate();
-				else
-					SendPosition();
+				//if (IsMoving())
+				//	SendPositionUpdate();
+				//else
+				//	SendPosition();
 			}
 
 			if(!IsMercCaster() && GetTarget() && !IsStunned() && !IsMezzed() && (GetAppearance() != eaDead))
@@ -1644,7 +1618,7 @@ void Merc::AI_Process() {
 					{
 						if(zone->random.Roll(flurrychance))
 						{
-							Message_StringID(MT_NPCFlurry, YOU_FLURRY);
+							MessageString(Chat::NPCFlurry, YOU_FLURRY);
 							Attack(GetTarget(), EQEmu::invslot::slotPrimary, false);
 							Attack(GetTarget(), EQEmu::invslot::slotPrimary, false);
 						}
@@ -1663,11 +1637,11 @@ void Merc::AI_Process() {
 				// TODO: Do mercs berserk? Find this out on live...
 				//if (GetClass() == WARRIOR || GetClass() == BERSERKER) {
 				//      if(GetHP() > 0 && !berserk && this->GetHPRatio() < 30) {
-				//              entity_list.MessageClose_StringID(this, false, 200, 0, BERSERK_START, GetName());
+				//              entity_list.MessageCloseString(this, false, 200, 0, BERSERK_START, GetName());
 				//              this->berserk = true;
 				//      }
 				//      if (berserk && this->GetHPRatio() > 30) {
-				//              entity_list.MessageClose_StringID(this, false, 200, 0, BERSERK_END, GetName());
+				//              entity_list.MessageCloseString(this, false, 200, 0, BERSERK_END, GetName());
 				//              this->berserk = false;
 				//      }
 				//}
@@ -1714,15 +1688,15 @@ void Merc::AI_Process() {
 			if (AI_movement_timer->Check())
 			{
 				if(!IsRooted()) {
-					Log(Logs::Detail, Logs::AI, "Pursuing %s while engaged.", GetTarget()->GetCleanName());
-					CalculateNewPosition(GetTarget()->GetX(), GetTarget()->GetY(), GetTarget()->GetZ(), GetRunspeed());
+					LogAI("Pursuing [{}] while engaged", GetTarget()->GetCleanName());
+					RunTo(GetTarget()->GetX(), GetTarget()->GetY(), GetTarget()->GetZ());
 					return;
 				}
 
-				if(IsMoving())
-					SendPositionUpdate();
-				else
-					SendPosition();
+				//if(IsMoving())
+				//	SendPositionUpdate();
+				//else
+				//	SentPositionPacket(0.0f, 0.0f, 0.0f, 0.0f, 0);
 			}
 		} // end not in combat range
 
@@ -1770,27 +1744,19 @@ void Merc::AI_Process() {
 
 				if (follow) {
 					float dist = DistanceSquared(m_Position, follow->GetPosition());
-					int speed = GetRunspeed();
+					bool running = true;
 
 					if (dist < GetFollowDistance() + 1000)
-						speed = GetWalkspeed();
+						running = false;
 
 					SetRunAnimSpeed(0);
 
 					if (dist > GetFollowDistance()) {
-						if (RuleB(Mercs, MercsUsePathing) && zone->pathing) {
-							bool WaypointChanged, NodeReached;
-
-							glm::vec3 Goal = UpdatePath(follow->GetX(), follow->GetY(), follow->GetZ(),
-								speed, WaypointChanged, NodeReached);
-
-							if (WaypointChanged)
-								tar_ndx = 20;
-
-							CalculateNewPosition(Goal.x, Goal.y, Goal.z, speed);
+						if (running) {
+							RunTo(follow->GetX(), follow->GetY(), follow->GetZ());
 						}
 						else {
-							CalculateNewPosition(follow->GetX(), follow->GetY(), follow->GetZ(), speed);
+							WalkTo(follow->GetX(), follow->GetY(), follow->GetZ());
 						}
 
 						if (rest_timer.Enabled())
@@ -1799,7 +1765,7 @@ void Merc::AI_Process() {
 					else {
 						if (moved) {
 							moved = false;
-							SetCurrentSpeed(0);
+							StopNavigation();
 						}
 					}
 				}
@@ -1825,8 +1791,7 @@ void Merc::AI_Start(int32 iMoveDelay) {
 	}
 
 	SendTo(GetX(), GetY(), GetZ());
-	SetChanged();
-	SaveGuardSpot();
+	SaveGuardSpot(GetPosition());
 }
 
 void Merc::AI_Stop() {
@@ -1842,7 +1807,7 @@ bool Merc::AI_EngagedCastCheck() {
 	{
 		AIautocastspell_timer->Disable();       //prevent the timer from going off AGAIN while we are casting.
 
-		Log(Logs::Detail, Logs::AI, "Merc Engaged autocast check triggered");
+		LogAI("Merc Engaged autocast check triggered");
 
 		int8 mercClass = GetClass();
 
@@ -1897,7 +1862,7 @@ bool Merc::AI_IdleCastCheck() {
 
 	if (AIautocastspell_timer->Check(false)) {
 #if MercAI_DEBUG_Spells >= 25
-		Log(Logs::Detail, Logs::AI, "Merc Non-Engaged autocast check triggered: %s", this->GetCleanName());
+		LogAI("Merc Non-Engaged autocast check triggered: [{}]", this->GetCleanName());
 #endif
 		AIautocastspell_timer->Disable();       //prevent the timer from going off AGAIN while we are casting.
 
@@ -1943,13 +1908,13 @@ bool Merc::AI_IdleCastCheck() {
 
 bool EntityList::Merc_AICheckCloseBeneficialSpells(Merc* caster, uint8 iChance, float iRange, uint32 iSpellTypes) {
 
-	if((iSpellTypes&SpellTypes_Detrimental) != 0) {
+	if((iSpellTypes & SPELL_TYPES_DETRIMENTAL) != 0) {
 		//according to live, you can buff and heal through walls...
 		//now with PCs, this only applies if you can TARGET the target, but
 		// according to Rogean, Live NPCs will just cast through walls/floors, no problem..
 		//
 		// This check was put in to address an idle-mob CPU issue
-		Log(Logs::General, Logs::Error, "Error: detrimental spells requested from AICheckCloseBeneficialSpells!!");
+		LogError("Error: detrimental spells requested from AICheckCloseBeneficialSpells!!");
 		return(false);
 	}
 
@@ -2025,10 +1990,10 @@ bool Merc::AIDoSpellCast(uint16 spellid, Mob* tar, int32 mana_cost, uint32* oDon
 		|| dist2 <= GetActSpellRange(spellid, spells[spellid].range)*GetActSpellRange(spellid, spells[spellid].range)) && (mana_cost <= GetMana() || GetMana() == GetMaxMana()))
 	{
 		SetRunAnimSpeed(0);
-		SendPosition();
+		SentPositionPacket(0.0f, 0.0f, 0.0f, 0.0f, 0);
 		SetMoving(false);
 
-		result = CastSpell(spellid, tar->GetID(), EQEmu::CastingSlot::Gem2, -1, mana_cost, oDontDoAgainBefore, -1, -1, 0, 0);
+		result = CastSpell(spellid, tar->GetID(), EQEmu::spells::CastingSlot::Gem2, -1, mana_cost, oDontDoAgainBefore, -1, -1, 0, 0);
 
 		if(IsCasting() && IsSitting())
 			Stand();
@@ -2658,7 +2623,7 @@ int16 Merc::GetFocusEffect(focusType type, uint16 spell_id) {
 			realTotal = CalcFocusEffect(type, UsedFocusID, spell_id);
 
 		if (realTotal != 0 && UsedItem)
-			Message_StringID(MT_Spells, BEGINS_TO_GLOW, UsedItem->Name);
+			MessageString(Chat::Spells, BEGINS_TO_GLOW, UsedItem->Name);
 	}
 
 	//Check if spell focus effect exists for the client.
@@ -3704,13 +3669,13 @@ MercSpell Merc::GetBestMercSpellForAENuke(Merc* caster, Mob* tar) {
 
 		switch(caster->GetStance())
 		{
-		case MercStanceBurnAE:
+		case EQEmu::constants::stanceBurnAE:
 			initialCastChance = 50;
 			break;
-		case MercStanceBalanced:
+		case EQEmu::constants::stanceBalanced:
 			initialCastChance = 25;
 			break;
-		case MercStanceBurn:
+		case EQEmu::constants::stanceBurn:
 			initialCastChance = 0;
 			break;
 		}
@@ -3752,11 +3717,11 @@ MercSpell Merc::GetBestMercSpellForTargetedAENuke(Merc* caster, Mob* tar) {
 
 	switch(caster->GetStance())
 	{
-	case MercStanceBurnAE:
+	case EQEmu::constants::stanceBurnAE:
 		numTargetsCheck = 1;
 		break;
-	case MercStanceBalanced:
-	case MercStanceBurn:
+	case EQEmu::constants::stanceBalanced:
+	case EQEmu::constants::stanceBurn:
 		numTargetsCheck = 2;
 		break;
 	}
@@ -3804,11 +3769,11 @@ MercSpell Merc::GetBestMercSpellForPBAENuke(Merc* caster, Mob* tar) {
 
 	switch(caster->GetStance())
 	{
-	case MercStanceBurnAE:
+	case EQEmu::constants::stanceBurnAE:
 		numTargetsCheck = 2;
 		break;
-	case MercStanceBalanced:
-	case MercStanceBurn:
+	case EQEmu::constants::stanceBalanced:
+	case EQEmu::constants::stanceBurn:
 		numTargetsCheck = 3;
 		break;
 	}
@@ -3855,11 +3820,11 @@ MercSpell Merc::GetBestMercSpellForAERainNuke(Merc* caster, Mob* tar) {
 
 	switch(caster->GetStance())
 	{
-	case MercStanceBurnAE:
+	case EQEmu::constants::stanceBurnAE:
 		numTargetsCheck = 1;
 		break;
-	case MercStanceBalanced:
-	case MercStanceBurn:
+	case EQEmu::constants::stanceBalanced:
+	case EQEmu::constants::stanceBurn:
 		numTargetsCheck = 2;
 		break;
 	}
@@ -4080,7 +4045,7 @@ bool Merc::UseDiscipline(int32 spell_id, int32 target) {
 	if(IsCasting())
 		InterruptSpell();
 
-	CastSpell(spell_id, target, EQEmu::CastingSlot::Discipline);
+	CastSpell(spell_id, target, EQEmu::spells::CastingSlot::Discipline);
 
 	return(true);
 }
@@ -4395,9 +4360,8 @@ void Merc::Sit() {
 	if(IsMoving()) {
 		moved = false;
 		// SetHeading(CalculateHeadingToTarget(GetTarget()->GetX(), GetTarget()->GetY()));
-		SendPosition();
+		SentPositionPacket(0.0f, 0.0f, 0.0f, 0.0f, 0);
 		SetMoving(false);
-		tar_ndx = 0;
 	}
 
 	SetAppearance(eaSitting);
@@ -4530,7 +4494,7 @@ bool Merc::Attack(Mob* other, int Hand, bool bRiposte, bool IsStrikethrough, boo
 {
 	if (!other) {
 		SetTarget(nullptr);
-		Log(Logs::General, Logs::Error, "A null Mob object was passed to Merc::Attack() for evaluation!");
+		LogError("A null Mob object was passed to Merc::Attack() for evaluation!");
 		return false;
 	}
 
@@ -4985,7 +4949,7 @@ void Merc::ScaleStats(int scalepercent, bool setmax) {
 		max_hp = (int)((float)base_hp * scalerate);
 		base_hp = max_hp;
 		if (setmax)
-			cur_hp = max_hp;
+			current_hp = max_hp;
 	}
 
 	if (base_mana)
@@ -5164,7 +5128,7 @@ bool Merc::Spawn(Client *owner) {
 
 	entity_list.AddMerc(this, true, true);
 
-	SendPosition();
+	SentPositionPacket(0.0f, 0.0f, 0.0f, 0.0f, 0);
 
 	Log(Logs::General, Logs::Mercenaries, "Spawn Mercenary %s.", GetName());
 
@@ -5357,10 +5321,10 @@ void Client::UpdateMercTimer()
 			Log(Logs::General, Logs::Mercenaries, "UpdateMercTimer Complete for %s.", GetName());
 
 			// Normal upkeep charge message
-			//Message(7, "You have been charged a mercenary upkeep cost of %i plat, and %i gold and your mercenary upkeep cost timer has been reset to 15 minutes.", upkeep_plat, upkeep_gold, (int)(RuleI(Mercs, UpkeepIntervalMS) / 1000 / 60));
+			//Message(Chat::LightGray, "You have been charged a mercenary upkeep cost of %i plat, and %i gold and your mercenary upkeep cost timer has been reset to 15 minutes.", upkeep_plat, upkeep_gold, (int)(RuleI(Mercs, UpkeepIntervalMS) / 1000 / 60));
 
 			// Message below given when too low level to be charged
-			//Message(7, "Your mercenary waived an upkeep cost of %i plat, and %i gold or %i %s and your mercenary upkeep cost timer has been reset to %i minutes", upkeep_plat, upkeep_gold, 1, "Bayle Marks", (int)(RuleI(Mercs, UpkeepIntervalMS) / 1000 / 60));
+			//Message(Chat::LightGray, "Your mercenary waived an upkeep cost of %i plat, and %i gold or %i %s and your mercenary upkeep cost timer has been reset to %i minutes", upkeep_plat, upkeep_gold, 1, "Bayle Marks", (int)(RuleI(Mercs, UpkeepIntervalMS) / 1000 / 60));
 		}
 	}
 }
@@ -5685,7 +5649,7 @@ void Client::SpawnMerc(Merc* merc, bool setMaxStats) {
 	merc->SetSuspended(false);
 	SetMerc(merc);
 	merc->Unsuspend(setMaxStats);
-	merc->SetStance(GetMercInfo().Stance);
+	merc->SetStance((EQEmu::constants::StanceType)GetMercInfo().Stance);
 
 	Log(Logs::General, Logs::Mercenaries, "SpawnMerc Success for %s.", GetName());
 
@@ -6217,7 +6181,7 @@ void NPC::LoadMercTypes() {
 	auto results = database.QueryDatabase(query);
 	if (!results.Success())
 	{
-		Log(Logs::General, Logs::Error, "Error in NPC::LoadMercTypes()");
+		LogError("Error in NPC::LoadMercTypes()");
 		return;
 	}
 
@@ -6250,7 +6214,7 @@ void NPC::LoadMercs() {
 
 	if (!results.Success())
 	{
-		Log(Logs::General, Logs::Error, "Error in NPC::LoadMercTypes()");
+		LogError("Error in NPC::LoadMercTypes()");
 		return;
 	}
 

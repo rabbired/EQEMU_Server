@@ -240,7 +240,7 @@ void NPC::AddLootDrop(const EQEmu::ItemData *item2, ItemList* itemlist, int16 ch
 
 	auto item = new ServerLootItem_Struct;
 #if EQDEBUG>=11
-		Log(Logs::General, Logs::None, "Adding drop to npc: %s, Item: %i", GetName(), item2->ID);
+		LogDebug("Adding drop to npc: [{}], Item: [{}]", GetName(), item2->ID);
 #endif
 
 	EQApplicationPacket* outapp = nullptr;
@@ -323,7 +323,7 @@ void NPC::AddLootDrop(const EQEmu::ItemData *item2, ItemList* itemlist, int16 ch
 		// @merth: IDFile size has been increased, this needs to change
 		uint16 emat;
 		if(item2->Material <= 0
-			|| item2->Slots & (1 << EQEmu::invslot::slotPrimary | 1 << EQEmu::invslot::slotSecondary)) {
+			|| (item2->Slots & ((1 << EQEmu::invslot::slotPrimary) | (1 << EQEmu::invslot::slotSecondary)))) {
 			memset(newid, 0, sizeof(newid));
 			for(int i=0;i<7;i++){
 				if (!isalpha(item2->IDFile[i])){
@@ -352,7 +352,7 @@ void NPC::AddLootDrop(const EQEmu::ItemData *item2, ItemList* itemlist, int16 ch
 		}
 		else if (foundslot == EQEmu::invslot::slotSecondary
 			&& (GetOwner() != nullptr || (CanThisClassDualWield() && zone->random.Roll(NPC_DW_CHANCE)) || (item2->Damage==0)) &&
-			(item2->IsType1HWeapon() || item2->ItemType == EQEmu::item::ItemTypeShield))
+			(item2->IsType1HWeapon() || item2->ItemType == EQEmu::item::ItemTypeShield || item2->ItemType ==  EQEmu::item::ItemTypeLight))
 		{
 			if (item2->Proc.Effect!=0)
 				CastToMob()->AddProcToWeapon(item2->Proc.Effect, true);

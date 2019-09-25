@@ -52,22 +52,18 @@ void Mob::CalcBonuses()
 		We set this here because NPC's can cast spells to change walkspeed/runspeed
 	*/
 	float get_walk_speed = static_cast<float>(0.025f * this->GetWalkspeed());
-	if (get_walk_speed >= 0.9 && this->fix_z_timer.GetDuration() != 100) {
-		this->fix_z_timer.SetTimer(100);
-	}
-
 	rooted = FindType(SE_Root);
 }
 
 void NPC::CalcBonuses()
 {
 	memset(&itembonuses, 0, sizeof(StatBonuses));
-	if(RuleB(NPC, UseItemBonusesForNonPets)){
+	if (RuleB(NPC, UseItemBonusesForNonPets)) {
 		memset(&itembonuses, 0, sizeof(StatBonuses));
 		CalcItemBonuses(&itembonuses);
 	}
-	else{
-		if(GetOwner()){
+	else {
+		if (GetOwner()) {
 			memset(&itembonuses, 0, sizeof(StatBonuses));
 			CalcItemBonuses(&itembonuses);
 		}
@@ -177,14 +173,6 @@ void Client::CalcItemBonuses(StatBonuses* newbon) {
 		}
 		else if (i == EQEmu::invslot::slotPrimary && (item && (item->ItemType == EQEmu::item::ItemType2HSlash || item->ItemType == EQEmu::item::ItemType2HPiercing)))
 			SetTwoHanderEquipped(true);
-	}
-
-	//Power Source Slot
-	if (ClientVersion() >= EQEmu::versions::ClientVersion::SoF)
-	{
-		const EQEmu::ItemInstance* inst = m_inv[EQEmu::invslot::SLOT_POWER_SOURCE];
-		if(inst)
-			AddItemBonuses(inst, newbon);
 	}
 
 	//tribute items
@@ -675,7 +663,7 @@ void Mob::ApplyAABonuses(const AA::Rank &rank, StatBonuses *newbon)
 		    effect == SE_StackingCommand_Overwrite)
 			continue;
 
-		Log(Logs::Detail, Logs::AA, "Applying Effect %d from AA %u in slot %d (base1: %d, base2: %d) on %s",
+		LogAA("Applying Effect [{}] from AA [{}] in slot [{}] (base1: [{}], base2: [{}]) on [{}]",
 			effect, rank.id, slot, base1, base2, GetCleanName());
 
 		uint8 focus = IsFocusEffect(0, 0, true, effect);
@@ -1217,8 +1205,12 @@ void Mob::ApplyAABonuses(const AA::Rank &rank, StatBonuses *newbon)
 			break;
 		}
 
-		case SE_CastingLevel2:
 		case SE_CastingLevel: {
+			newbon->adjusted_casting_skill += base1;
+			break;
+		}
+
+		case SE_CastingLevel2: {
 			newbon->effective_casting_level += base1;
 			break;
 		}
@@ -1484,14 +1476,23 @@ void Mob::ApplyAABonuses(const AA::Rank &rank, StatBonuses *newbon)
 			newbon->trap_slots += base1;
 			break;
 
+		case SE_ForageSkill:
+			newbon->GrantForage += base1;
+			// we need to grant a skill point here
+			// I'd rather not do this here, but whatever, probably fine
+			if (IsClient()) {
+				auto client = CastToClient();
+				if (client->GetRawSkill(EQEmu::skills::SkillType::SkillForage) == 0)
+					client->SetSkill(EQEmu::skills::SkillType::SkillForage, 1);
+			}
+			break;
+
 		// to do
 		case SE_PetDiscipline:
 			break;
 		case SE_PotionBeltSlots:
 			break;
 		case SE_BandolierSlots:
-			break;
-		case SE_ForageSkill:
 			break;
 		case SE_SecondaryForte:
 			break;
@@ -1536,7 +1537,7 @@ void Mob::ApplyAABonuses(const AA::Rank &rank, StatBonuses *newbon)
 			break;
 
 		default:
-			Log(Logs::Detail, Logs::AA, "SPA %d not accounted for in AA %s (%d)", effect, rank.base_ability->name.c_str(), rank.id);
+			LogAA("SPA [{}] not accounted for in AA [{}] ([{}])", effect, rank.base_ability->name.c_str(), rank.id);
 			break;
 		}
 
@@ -1917,8 +1918,13 @@ void Mob::ApplySpellsBonuses(uint16 spell_id, uint8 casterlevel, StatBonuses *ne
 				break;
 			}
 
-			case SE_CastingLevel2:
 			case SE_CastingLevel:	// Brilliance of Ro
+			{
+				new_bonus->adjusted_casting_skill += effect_value;
+				break;
+			}
+
+			case SE_CastingLevel2:
 			{
 				new_bonus->effective_casting_level += effect_value;
 				break;
@@ -3261,7 +3267,7 @@ void NPC::CalcItemBonuses(StatBonuses *newbon)
 {
 	if(newbon){
 
-		for (int i = EQEmu::invslot::EQUIPMENT_BEGIN; i <= EQEmu::invslot::EQUIPMENT_END; i++){
+		for (int i = EQEmu::invslot::BONUS_BEGIN; i <= EQEmu::invslot::BONUS_STAT_END; i++){
 			const EQEmu::ItemData *cur = database.GetItem(equipment[i]);
 			if(cur){
 				//basic stats
@@ -3353,13 +3359,6 @@ void Client::CalcItemScale() {
 	if (CalcItemScale(EQEmu::invslot::TRIBUTE_BEGIN, EQEmu::invslot::TRIBUTE_END)) // (< 405)
 		changed = true;
 
-	//Power Source Slot
-	if (ClientVersion() >= EQEmu::versions::ClientVersion::SoF)
-	{
-		if (CalcItemScale(EQEmu::invslot::SLOT_POWER_SOURCE, EQEmu::invslot::SLOT_POWER_SOURCE))
-			changed = true;
-	}
-
 	if(changed)
 	{
 		CalcBonuses();
@@ -3447,13 +3446,6 @@ void Client::DoItemEnterZone() {
 	if (DoItemEnterZone(EQEmu::invslot::TRIBUTE_BEGIN, EQEmu::invslot::TRIBUTE_END)) // (< 405)
 		changed = true;
 
-	//Power Source Slot
-	if (ClientVersion() >= EQEmu::versions::ClientVersion::SoF)
-	{
-		if (DoItemEnterZone(EQEmu::invslot::SLOT_POWER_SOURCE, EQEmu::invslot::SLOT_POWER_SOURCE))
-			changed = true;
-	}
-
 	if(changed)
 	{
 		CalcBonuses();
@@ -3486,7 +3478,7 @@ bool Client::DoItemEnterZone(uint32 slot_x, uint32 slot_y) {
 			uint16 oldexp = inst->GetExp();
 
 			parse->EventItem(EVENT_ITEM_ENTER_ZONE, this, inst, nullptr, "", 0);
-			if (i <= EQEmu::invslot::slotAmmo || i == EQEmu::invslot::SLOT_POWER_SOURCE) {
+			if (i <= EQEmu::invslot::EQUIPMENT_END) {
 				parse->EventItem(EVENT_EQUIP_ITEM, this, inst, nullptr, "", i);
 			}
 
@@ -3496,7 +3488,7 @@ bool Client::DoItemEnterZone(uint32 slot_x, uint32 slot_y) {
 				update_slot = true;
 			}
 		} else {
-			if (i <= EQEmu::invslot::slotAmmo || i == EQEmu::invslot::SLOT_POWER_SOURCE) {
+			if (i <= EQEmu::invslot::EQUIPMENT_END) {
 				parse->EventItem(EVENT_EQUIP_ITEM, this, inst, nullptr, "", i);
 			}
 
@@ -3867,8 +3859,13 @@ void Mob::NegateSpellsBonuses(uint16 spell_id)
 					aabonuses.Corrup = effect_value;
 					break;
 
-				case SE_CastingLevel2:
 				case SE_CastingLevel:	// Brilliance of Ro
+					spellbonuses.adjusted_casting_skill = effect_value;
+					aabonuses.adjusted_casting_skill = effect_value;
+					itembonuses.adjusted_casting_skill = effect_value;
+					break;
+
+				case SE_CastingLevel2:
 					spellbonuses.effective_casting_level = effect_value;
 					aabonuses.effective_casting_level = effect_value;
 					itembonuses.effective_casting_level = effect_value;

@@ -114,7 +114,7 @@ PathfinderWaypoint::~PathfinderWaypoint()
 {
 }
 
-IPathfinder::IPath PathfinderWaypoint::FindRoute(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck)
+IPathfinder::IPath PathfinderWaypoint::FindRoute(const glm::vec3 &start, const glm::vec3 &end, bool &partial, bool &stuck, int flags)
 {
 	stuck = false;
 	partial = false;
@@ -184,7 +184,7 @@ IPathfinder::IPath PathfinderWaypoint::FindRoute(const glm::vec3 &start, const g
 	return IPath();
 }
 
-glm::vec3 PathfinderWaypoint::GetRandomLocation()
+glm::vec3 PathfinderWaypoint::GetRandomLocation(const glm::vec3 &start)
 {
 	if (m_impl->Nodes.size() > 0) {
 		auto idx = zone->random.Int(0, (int)m_impl->Nodes.size() - 1);
@@ -200,9 +200,9 @@ void PathfinderWaypoint::DebugCommand(Client *c, const Seperator *sep)
 {
 	if(sep->arg[1][0] == '\0' || !strcasecmp(sep->arg[1], "help"))
 	{
-		c->Message(0, "Syntax: #path shownodes: Spawns a npc to represent every npc node.");
-		c->Message(0, "#path show: Plots a path from the user to their target.");
-		c->Message(0, "#path info node_id: Gives information about node info (requires shownode target).");
+		c->Message(Chat::White, "Syntax: #path shownodes: Spawns a npc to represent every npc node.");
+		c->Message(Chat::White, "#path show: Plots a path from the user to their target.");
+		c->Message(Chat::White, "#path info node_id: Gives information about node info (requires shownode target).");
 		return;
 	}
 	
@@ -251,14 +251,14 @@ void PathfinderWaypoint::Load(const std::string &filename) {
 	
 		if (strncmp(Magic, "EQEMUPATH", 9))
 		{
-			Log(Logs::General, Logs::Error, "Bad Magic String in .path file.");
+			LogError("Bad Magic String in .path file");
 			fclose(f);
 			return;
 		}
 	
 		fread(&Head, sizeof(Head), 1, f);
 	
-		Log(Logs::General, Logs::Status, "Path File Header: Version %ld, PathNodes %ld",
+		LogInfo("Path File Header: Version [{}], PathNodes [{}]",
 			(long)Head.version, (long)Head.PathNodeCount);
 	
 		if (Head.version == 2)
@@ -271,7 +271,7 @@ void PathfinderWaypoint::Load(const std::string &filename) {
 			return;
 		}
 		else {
-			Log(Logs::General, Logs::Error, "Unsupported path file version.");
+			LogError("Unsupported path file version");
 			fclose(f);
 			return;
 		}
@@ -306,7 +306,7 @@ void PathfinderWaypoint::LoadV2(FILE *f, const PathFileHeader &header)
 			auto &node = m_impl->Nodes[i];
 			if (PathNodes[i].Neighbours[j].id > MaxNodeID)
 			{
-				Log(Logs::General, Logs::Error, "Path Node %i, Neighbour %i (%i) out of range.", i, j, PathNodes[i].Neighbours[j].id);
+				LogError("Path Node [{}], Neighbour [{}] ([{}]) out of range", i, j, PathNodes[i].Neighbours[j].id);
 				m_impl->PathFileValid = false;
 			}
 	
@@ -425,11 +425,11 @@ void PathfinderWaypoint::NodeInfo(Client *c)
 		return;
 	}
 
-	c->Message(0, "Pathing node: %i at (%.2f, %.2f, %.2f) with bestz %.2f",
+	c->Message(Chat::White, "Pathing node: %i at (%.2f, %.2f, %.2f) with bestz %.2f",
 		node->id, node->v.x, node->v.y, node->v.z, node->bestz);
 
 	for (auto &edge : node->edges) {
-		c->Message(0, "id: %i, distance: %.2f, door id: %i, is teleport: %i",
+		c->Message(Chat::White, "id: %i, distance: %.2f, door id: %i, is teleport: %i",
 			edge.first,
 			edge.second.distance,
 			edge.second.door_id,
@@ -529,7 +529,7 @@ void PathfinderWaypoint::ShowNode(const Node &n) {
 
 	sprintf(npc_type->name, "%s", DigitToWord(n.id).c_str());
 	sprintf(npc_type->lastname, "%i", n.id);
-	npc_type->cur_hp = 4000000;
+	npc_type->current_hp = 4000000;
 	npc_type->max_hp = 4000000;
 	npc_type->race = 2254;
 	npc_type->gender = 2;
@@ -557,7 +557,7 @@ void PathfinderWaypoint::ShowNode(const Node &n) {
 
 	npc_type->findable = 1;
 	auto position = glm::vec4(n.v.x, n.v.y, n.v.z, 0.0f);
-	auto npc = new NPC(npc_type, nullptr, position, FlyMode1);
+	auto npc = new NPC(npc_type, nullptr, position, GravityBehavior::Flying);
 	npc->GiveNPCTypeData(npc_type);
 
 	entity_list.AddNPC(npc, true, true);

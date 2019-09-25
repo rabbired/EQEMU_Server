@@ -87,11 +87,16 @@ public:
 	void PauseWandering(int pause_time);
 	void MoveTo(float x, float y, float z, float h, bool save);
 	void NextGuardPosition();
-	void SaveGuardSpot();
-	void SaveGuardSpot(bool clear);
+	void SaveGuardSpot(float x, float y, float z, float heading);
 	bool IsGuarding();
 	void AI_SetRoambox(float dist, float max_x, float min_x, float max_y, float min_y);
 	void AI_SetRoambox(float dist, float max_x, float min_x, float max_y, float min_y, uint32 delay, uint32 mindelay);
+	void SetFollowID(int id);
+	void SetFollowDistance(int dist);
+	void SetFollowCanRun(bool v);
+	int GetFollowID();
+	int GetFollowDistance();
+	bool GetFollowCanRun();
 	int GetNPCSpellsID();
 	int GetSpawnPointID();
 	float GetSpawnPointX();
@@ -126,6 +131,9 @@ public:
 	void MerchantCloseShop();
 	int GetRawAC();
 	int GetAvoidanceRating();
+	void SetSimpleRoamBox(float box_size);
+	void SetSimpleRoamBox(float box_size, float move_distance);
+	void SetSimpleRoamBox(float box_size, float move_distance, int move_delay);
 };
 
 #endif

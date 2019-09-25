@@ -212,16 +212,16 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 	//lookup our pets table record for this type
 	PetRecord record;
 	if(!database.GetPoweredPetEntry(pettype, act_power, &record)) {
-		Message(13, "Unable to find data for pet %s", pettype);
-		Log(Logs::General, Logs::Error, "Unable to find data for pet %s, check pets table.", pettype);
+		Message(Chat::Red, "Unable to find data for pet %s", pettype);
+		LogError("Unable to find data for pet [{}], check pets table", pettype);
 		return;
 	}
 
 	//find the NPC data for the specified NPC type
 	const NPCType *base = database.LoadNPCTypesData(record.npc_type);
 	if(base == nullptr) {
-		Message(13, "Unable to load NPC data for pet %s", pettype);
-		Log(Logs::General, Logs::Error, "Unable to load NPC data for pet %s (NPC ID %d), check pets and npc_types tables.", pettype, record.npc_type);
+		Message(Chat::Red, "Unable to load NPC data for pet %s", pettype);
+		LogError("Unable to load NPC data for pet [{}] (NPC ID [{}]), check pets and npc_types tables", pettype, record.npc_type);
 		return;
 	}
 
@@ -240,7 +240,7 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 		if(scale_power > 0)
 		{
 			npc_type->max_hp *= (1 + scale_power);
-			npc_type->cur_hp = npc_type->max_hp;
+			npc_type->current_hp = npc_type->max_hp;
 			npc_type->AC *= (1 + scale_power);
 			npc_type->level += 1 + ((int)act_power / 25) > npc_type->level + RuleR(Pets, PetPowerLevelCap) ? RuleR(Pets, PetPowerLevelCap) : 1 + ((int)act_power / 25); // gains an additional level for every 25 pet power
 			npc_type->min_dmg = (npc_type->min_dmg * (1 + (scale_power / 2)));
@@ -255,7 +255,7 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 
 	if (MaxHP){
 		npc_type->max_hp += (npc_type->max_hp*MaxHP)/100;
-		npc_type->cur_hp = npc_type->max_hp;
+		npc_type->current_hp = npc_type->max_hp;
 	}
 
 	//TODO: think about regen (engaged vs. not engaged)
@@ -374,7 +374,7 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 			npc_type->helmtexture = monster->helmtexture;
 			npc_type->herosforgemodel = monster->herosforgemodel;
 		} else
-			Log(Logs::General, Logs::Error, "Error loading NPC data for monster summoning pet (NPC ID %d)", monsterid);
+			LogError("Error loading NPC data for monster summoning pet (NPC ID [{}])", monsterid);
 
 	}
 
@@ -425,7 +425,7 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 into walls or objects (+10), this sometimes creates the "ghost" effect. I changed to +2 (as close as I
 could get while it still looked good). I also noticed this can happen if an NPC is spawned on the same spot of another or in a related bad spot.*/
 Pet::Pet(NPCType *type_data, Mob *owner, PetType type, uint16 spell_id, int16 power)
-: NPC(type_data, 0, owner->GetPosition() + glm::vec4(2.0f, 2.0f, 0.0f, 0.0f), FlyMode3)
+: NPC(type_data, 0, owner->GetPosition() + glm::vec4(2.0f, 2.0f, 0.0f, 0.0f), GravityBehavior::Water)
 {
 	GiveNPCTypeData(type_data);
 	typeofpet = type;
@@ -527,7 +527,7 @@ void NPC::GetPetState(SpellBuff_Struct *pet_buffs, uint32 *items, char *name) {
 	memcpy(items, equipment, sizeof(uint32) * EQEmu::invslot::EQUIPMENT_COUNT);
 
 	//save their buffs.
-	for (int i=0; i < GetPetMaxTotalSlots(); i++) {
+	for (int i=EQEmu::invslot::EQUIPMENT_BEGIN; i < GetPetMaxTotalSlots(); i++) {
 		if (buffs[i].spellid != SPELL_UNKNOWN) {
 			pet_buffs[i].spellid = buffs[i].spellid;
 			pet_buffs[i].effect_type = i+1;
@@ -665,7 +665,7 @@ bool ZoneDatabase::GetBasePetItems(int32 equipmentset, uint32 *items) {
 
 		if (results.RowCount() != 1) {
 			// invalid set reference, it doesn't exist
-			Log(Logs::General, Logs::Error, "Error in GetBasePetItems equipment set '%d' does not exist", curset);
+			LogError("Error in GetBasePetItems equipment set [{}] does not exist", curset);
 			return false;
 		}
 

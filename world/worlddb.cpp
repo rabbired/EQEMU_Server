@@ -36,7 +36,7 @@ void WorldDatabase::GetCharSelectInfo(uint32 accountID, EQApplicationPacket **ou
 {
 	/* Set Character Creation Limit */
 	EQEmu::versions::ClientVersion client_version = EQEmu::versions::ConvertClientVersionBitToClientVersion(clientVersionBit);
-	size_t character_limit = EQEmu::constants::Lookup(client_version)->CharacterCreationLimit;
+	size_t character_limit = EQEmu::constants::StaticLookup(client_version)->CharacterCreationLimit;
 	
 	// Validate against absolute server max
 	if (character_limit > EQEmu::constants::CHARACTER_CREATION_LIMIT)
@@ -97,6 +97,11 @@ void WorldDatabase::GetCharSelectInfo(uint32 accountID, EQApplicationPacket **ou
 		CharacterSelectEntry_Struct *cse = (CharacterSelectEntry_Struct *)buff_ptr;
 		PlayerProfile_Struct pp;
 		EQEmu::InventoryProfile inv;
+
+		pp.SetPlayerProfileVersion(EQEmu::versions::ConvertClientVersionToMobVersion(client_version));
+		inv.SetInventoryVersion(client_version);
+		inv.SetGMInventory(true); // charsel can not interact with items..but, no harm in setting to full expansion support
+
 		uint32 character_id = (uint32)atoi(row[0]);
 		uint8 has_home = 0;
 		uint8 has_bind = 0;
@@ -243,7 +248,7 @@ void WorldDatabase::GetCharSelectInfo(uint32 accountID, EQApplicationPacket **ou
 
 		/* Load Inventory */
 		// If we ensure that the material data is updated appropriately, we can do away with inventory loads
-		if (GetInventory(accountID, cse->Name, &inv)) {
+		if (GetCharSelInventory(accountID, cse->Name, &inv)) {
 			const EQEmu::ItemData* item = nullptr;
 			const EQEmu::ItemInstance* inst = nullptr;
 			int16 invslot = 0;
@@ -361,14 +366,14 @@ bool WorldDatabase::GetStartZone(PlayerProfile_Struct* in_pp, CharCreate_Struct*
 		return false;
 	}
 
-	Log(Logs::General, Logs::Status, "SoF Start zone query: %s\n", query.c_str());
+	LogInfo("SoF Start zone query: [{}]\n", query.c_str());
 
     if (results.RowCount() == 0) {
         printf("No start_zones entry in database, using defaults\n");
 		isTitanium ? SetTitaniumDefaultStartZone(in_pp, in_cc) : SetSoFDefaultStartZone(in_pp, in_cc);
     }
     else {
-		Log(Logs::General, Logs::Status, "Found starting location in start_zones");
+		LogInfo("Found starting location in start_zones");
 		auto row = results.begin();
 		in_pp->x = atof(row[0]);
 		in_pp->y = atof(row[1]);
@@ -507,7 +512,7 @@ void WorldDatabase::GetLauncherList(std::vector<std::string> &rl) {
     const std::string query = "SELECT name FROM launcher";
     auto results = QueryDatabase(query);
     if (!results.Success()) {
-        Log(Logs::General, Logs::Error, "WorldDatabase::GetLauncherList: %s", results.ErrorMessage().c_str());
+        LogError("WorldDatabase::GetLauncherList: {}", results.ErrorMessage().c_str());
         return;
     }
 
@@ -521,7 +526,7 @@ bool WorldDatabase::GetCharacterLevel(const char *name, int &level)
 	std::string query = StringFormat("SELECT level FROM character_data WHERE name = '%s'", name);
 	auto results = QueryDatabase(query);
 	if (!results.Success()) {
-        Log(Logs::General, Logs::Error, "WorldDatabase::GetCharacterLevel: %s", results.ErrorMessage().c_str());
+        LogError("WorldDatabase::GetCharacterLevel: {}", results.ErrorMessage().c_str());
         return false;
 	}
 
@@ -586,6 +591,146 @@ bool WorldDatabase::LoadCharacterCreateCombos()
 		combo.ExpansionRequired = atoi(row[5]);
 
 		character_create_race_class_combos.push_back(combo);
+	}
+
+	return true;
+}
+
+// this is a slightly modified version of SharedDatabase::GetInventory(...) for character select use-only
+bool WorldDatabase::GetCharSelInventory(uint32 account_id, char *name, EQEmu::InventoryProfile *inv)
+{
+	if (!account_id || !name || !inv)
+		return false;
+
+	std::string query = StringFormat(
+		"SELECT"
+		" slotid,"
+		" itemid,"
+		" charges,"
+		" color,"
+		" augslot1,"
+		" augslot2,"
+		" augslot3,"
+		" augslot4,"
+		" augslot5,"
+		" augslot6,"
+		" instnodrop,"
+		" custom_data,"
+		" ornamenticon,"
+		" ornamentidfile,"
+		" ornament_hero_model "
+		"FROM"
+		" inventory "
+		"INNER JOIN"
+		" character_data ch "
+		"ON"
+		" ch.id = charid "
+		"WHERE"
+		" ch.name = '%s' "
+		"AND"
+		" ch.account_id = %i "
+		"AND"
+		" slotid >= %i "
+		"AND"
+		" slotid <= %i",
+		name,
+		account_id,
+		EQEmu::invslot::slotHead,
+		EQEmu::invslot::slotFeet
+	);
+	auto results = QueryDatabase(query);
+	if (!results.Success())
+		return false;
+
+	for (auto row = results.begin(); row != results.end(); ++row) {
+		int16 slot_id = atoi(row[0]);
+
+		switch (slot_id) {
+		case EQEmu::invslot::slotFace:
+		case EQEmu::invslot::slotEar2:
+		case EQEmu::invslot::slotNeck:
+		case EQEmu::invslot::slotShoulders:
+		case EQEmu::invslot::slotBack:
+		case EQEmu::invslot::slotFinger1:
+		case EQEmu::invslot::slotFinger2:
+			continue;
+		default:
+			break;
+		}
+
+		uint32 item_id = atoi(row[1]);
+		int8 charges = atoi(row[2]);
+		uint32 color = atoul(row[3]);
+
+		uint32 aug[EQEmu::invaug::SOCKET_COUNT];
+		aug[0] = (uint32)atoi(row[4]);
+		aug[1] = (uint32)atoi(row[5]);
+		aug[2] = (uint32)atoi(row[6]);
+		aug[3] = (uint32)atoi(row[7]);
+		aug[4] = (uint32)atoi(row[8]);
+		aug[5] = (uint32)atoi(row[9]);
+
+		bool instnodrop = ((row[10] && (uint16)atoi(row[10])) ? true : false);
+		uint32 ornament_icon = (uint32)atoul(row[12]);
+		uint32 ornament_idfile = (uint32)atoul(row[13]);
+		uint32 ornament_hero_model = (uint32)atoul(row[14]);
+
+		const EQEmu::ItemData *item = GetItem(item_id);
+		if (!item)
+			continue;
+
+		EQEmu::ItemInstance *inst = CreateBaseItem(item, charges);
+
+		if (inst == nullptr)
+			continue;
+
+		inst->SetAttuned(instnodrop);
+
+		if (row[11]) {
+			std::string data_str(row[11]);
+			std::string idAsString;
+			std::string value;
+			bool use_id = true;
+
+			for (int i = 0; i < data_str.length(); ++i) {
+				if (data_str[i] == '^') {
+					if (!use_id) {
+						inst->SetCustomData(idAsString, value);
+						idAsString.clear();
+						value.clear();
+					}
+
+					use_id = !use_id;
+					continue;
+				}
+
+				char v = data_str[i];
+				if (use_id)
+					idAsString.push_back(v);
+				else
+					value.push_back(v);
+			}
+		}
+
+		inst->SetOrnamentIcon(ornament_icon);
+		inst->SetOrnamentationIDFile(ornament_idfile);
+		inst->SetOrnamentHeroModel(item->HerosForgeModel);
+
+		if (color > 0)
+			inst->SetColor(color);
+
+		inst->SetCharges(charges);
+
+		if (item->IsClassCommon()) {
+			for (int i = EQEmu::invaug::SOCKET_BEGIN; i <= EQEmu::invaug::SOCKET_END; i++) {
+				if (aug[i])
+					inst->PutAugment(this, i, aug[i]);
+			}
+		}
+
+		inv->PutItem(slot_id, *inst);
+
+		safe_delete(inst);
 	}
 
 	return true;

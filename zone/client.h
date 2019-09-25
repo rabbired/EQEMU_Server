@@ -90,23 +90,6 @@ public:
 	bool ack_req;
 };
 
-enum { //Type arguments to the Message* routines.
-	//all not explicitly listed are the same grey color
-	clientMessageWhite0 = 0,
-	clientMessageLoot = 2, //dark green
-	clientMessageTradeskill = 4, //light blue
-	clientMessageTell = 5, //magenta
-	clientMessageWhite = 7,
-	clientMessageWhite2 = 10,
-	clientMessageLightGrey = 12,
-	clientMessageError = 13, //red
-	clientMessageGreen = 14,
-	clientMessageYellow = 15,
-	clientMessageBlue = 16,
-	clientMessageGroup = 18, //cyan
-	clientMessageWhite3 = 20,
-};
-
 #define SPELLBAR_UNLOCK 0x2bc
 enum { //scribing argument to MemorizeSpell
 	memSpellUnknown = -1, // this modifies some state data
@@ -246,6 +229,17 @@ public:
 	std::unordered_map<Mob *, float> close_mobs;
 	bool is_client_moving;
 
+	void SetDisplayMobInfoWindow(bool display_mob_info_window);
+	bool GetDisplayMobInfoWindow() const;
+
+	bool IsDevToolsWindowEnabled() const;
+	void SetDevToolsWindowEnabled(bool dev_tools_window_enabled);
+
+	void SetPrimaryWeaponOrnamentation(uint32 model_id);
+	void SetSecondaryWeaponOrnamentation(uint32 model_id);
+
+	bool GotoPlayer(std::string player_name);
+
 	//abstract virtual function implementations required by base abstract class
 	virtual bool Death(Mob* killerMob, int32 damage, uint16 spell_id, EQEmu::skills::SkillType attack_skill);
 	virtual void Damage(Mob* from, int32 damage, uint16 spell_id, EQEmu::skills::SkillType attack_skill, bool avoidable = true, int8 buffslot = -1, bool iBuffTic = false, eSpecialAttacks special = eSpecialAttacks::None);
@@ -284,11 +278,11 @@ public:
 	void SendBazaarWelcome();
 	void DyeArmor(EQEmu::TintProfile* dye);
 	uint8 SlotConvert(uint8 slot,bool bracer=false);
-	void Message_StringID(uint32 type, uint32 string_id, uint32 distance = 0);
-	void Message_StringID(uint32 type, uint32 string_id, const char* message,const char* message2=0,const char* message3=0,const char* message4=0,const char* message5=0,const char* message6=0,const char* message7=0,const char* message8=0,const char* message9=0, uint32 distance = 0);
+	void MessageString(uint32 type, uint32 string_id, uint32 distance = 0);
+	void MessageString(uint32 type, uint32 string_id, const char* message,const char* message2=0,const char* message3=0,const char* message4=0,const char* message5=0,const char* message6=0,const char* message7=0,const char* message8=0,const char* message9=0, uint32 distance = 0);
 	bool FilteredMessageCheck(Mob *sender, eqFilterType filter);
-	void FilteredMessage_StringID(Mob *sender, uint32 type, eqFilterType filter, uint32 string_id);
-	void FilteredMessage_StringID(Mob *sender, uint32 type, eqFilterType filter,
+	void FilteredMessageString(Mob *sender, uint32 type, eqFilterType filter, uint32 string_id);
+	void FilteredMessageString(Mob *sender, uint32 type, eqFilterType filter,
 					uint32 string_id, const char *message1, const char *message2 = nullptr,
 					const char *message3 = nullptr, const char *message4 = nullptr,
 					const char *message5 = nullptr, const char *message6 = nullptr,
@@ -327,11 +321,9 @@ public:
 	void QueuePacket(const EQApplicationPacket* app, bool ack_req = true, CLIENT_CONN_STATUS = CLIENT_CONNECTINGALL, eqFilterType filter=FilterNone);
 	void FastQueuePacket(EQApplicationPacket** app, bool ack_req = true, CLIENT_CONN_STATUS = CLIENT_CONNECTINGALL);
 	void ChannelMessageReceived(uint8 chan_num, uint8 language, uint8 lang_skill, const char* orig_message, const char* targetname=nullptr);
-	void ChannelMessageSend(const char* from, const char* to, uint8 chan_num, uint8 language, const char* message, ...);
 	void ChannelMessageSend(const char* from, const char* to, uint8 chan_num, uint8 language, uint8 lang_skill, const char* message, ...);
 	void Message(uint32 type, const char* message, ...);
 	void FilteredMessage(Mob *sender, uint32 type, eqFilterType filter, const char* message, ...);
-	void QuestJournalledMessage(const char *npcname, const char* message);
 	void VoiceMacroReceived(uint32 Type, char *Target, uint32 MacroNumber);
 	void SendSound();
 	void LearnRecipe(uint32 recipeID);
@@ -346,7 +338,7 @@ public:
 	void SetHideMe(bool hm);
 	inline uint16 GetPort() const { return port; }
 	bool IsDead() const { return(dead); }
-	bool IsUnconscious() const { return ((cur_hp <= 0) ? true : false); }
+	bool IsUnconscious() const { return ((current_hp <= 0) ? true : false); }
 	inline bool IsLFP() { return LFP; }
 	void UpdateLFP();
 
@@ -362,9 +354,9 @@ public:
 	inline bool ClientDataLoaded() const { return client_data_loaded; }
 	inline bool Connected() const { return (client_state == CLIENT_CONNECTED); }
 	inline bool InZone() const { return (client_state == CLIENT_CONNECTED || client_state == CLIENT_LINKDEAD); }
-	inline void Kick() { client_state = CLIENT_KICKED; }
 	inline void Disconnect() { eqs->Close(); client_state = DISCONNECTED; }
 	inline bool IsLD() const { return (bool) (client_state == CLIENT_LINKDEAD); }
+	void Kick(const std::string &reason);
 	void WorldKick();
 	inline uint8 GetAnon() const { return m_pp.anon; }
 	inline PlayerProfile_Struct& GetPP() { return m_pp; }
@@ -548,10 +540,10 @@ public:
 	virtual int GetCurrentBuffSlots() const;
 	virtual int GetCurrentSongSlots() const;
 	virtual int GetCurrentDiscSlots() const { return 1; }
-	virtual int GetMaxBuffSlots() const { return EQEmu::constants::LongBuffs; }
-	virtual int GetMaxSongSlots() const { return EQEmu::constants::ShortBuffs; }
-	virtual int GetMaxDiscSlots() const { return EQEmu::constants::DiscBuffs; }
-	virtual int GetMaxTotalSlots() const { return EQEmu::constants::TotalBuffs; }
+	virtual int GetMaxBuffSlots() const { return EQEmu::spells::LONG_BUFFS; }
+	virtual int GetMaxSongSlots() const { return EQEmu::spells::SHORT_BUFFS; }
+	virtual int GetMaxDiscSlots() const { return EQEmu::spells::DISC_BUFFS; }
+	virtual int GetMaxTotalSlots() const { return EQEmu::spells::TOTAL_BUFFS; }
 	virtual uint32 GetFirstBuffSlot(bool disc, bool song);
 	virtual uint32 GetLastBuffSlot(bool disc, bool song);
 	virtual void InitializeBuffSlots();
@@ -697,7 +689,9 @@ public:
 	void SendGuildJoin(GuildJoin_Struct* gj);
 	void RefreshGuildInfo();
 
-
+	int GetClientMaxLevel() const { return client_max_level; }
+	void SetClientMaxLevel(int max_level) { client_max_level = max_level; }
+	
 	void CheckManaEndUpdate();
 	void SendManaUpdate();
 	void SendEnduranceUpdate();
@@ -768,15 +762,21 @@ public:
 	void UnmemSpell(int slot, bool update_client = true);
 	void UnmemSpellBySpellID(int32 spell_id);
 	void UnmemSpellAll(bool update_client = true);
+	uint16 FindMemmedSpellBySlot(int slot);
+	int MemmedCount();
 	void ScribeSpell(uint16 spell_id, int slot, bool update_client = true);
 	void UnscribeSpell(int slot, bool update_client = true);
 	void UnscribeSpellAll(bool update_client = true);
 	void UntrainDisc(int slot, bool update_client = true);
 	void UntrainDiscAll(bool update_client = true);
-	bool SpellGlobalCheck(uint16 Spell_ID, uint32 Char_ID);
+	bool SpellGlobalCheck(uint16 spell_id, uint32 char_id);
+	bool SpellBucketCheck(uint16 spell_id, uint32 char_id);
 	uint32 GetCharMaxLevelFromQGlobal();
+	uint32 GetCharMaxLevelFromBucket();
 
+	inline bool IsStanding() const {return (playeraction == 0);}
 	inline bool IsSitting() const {return (playeraction == 1);}
+	inline bool IsCrouching() const {return (playeraction == 2);}
 	inline bool IsBecomeNPC() const { return npcflag; }
 	inline uint8 GetBecomeNPCLevel() const { return npclevel; }
 	inline void SetBecomeNPC(bool flag) { npcflag = flag; }
@@ -788,7 +788,7 @@ public:
 #ifdef PACKET_PROFILER
 	void DumpPacketProfile() { if(eqs) eqs->DumpPacketProfile(); }
 #endif
-	uint32 GetEquipment(uint8 material_slot) const; // returns item id
+	uint32 GetEquippedItemFromTextureSlot(uint8 material_slot) const; // returns item id
 	uint32 GetEquipmentColor(uint8 material_slot) const;
 	virtual void UpdateEquipmentLight() { m_Light.Type[EQEmu::lightsource::LightEquipment] = m_inv.FindBrightestLightType(); m_Light.Level[EQEmu::lightsource::LightEquipment] = EQEmu::lightsource::TypeToLevel(m_Light.Type[EQEmu::lightsource::LightEquipment]); }
 
@@ -851,7 +851,6 @@ public:
 	void SetAATitle(const char *Title);
 	void SetTitleSuffix(const char *txt);
 	void MemorizeSpell(uint32 slot, uint32 spellid, uint32 scribing);
-	int32 acmod();
 
 	// Item methods
 	void EVENT_ITEM_ScriptStopReturn();
@@ -876,6 +875,7 @@ public:
 	void SetStats(uint8 type,int16 set_val);
 	void IncStats(uint8 type,int16 increase_val);
 	void DropItem(int16 slot_id, bool recurse = true);
+	void DropItemQS(EQEmu::ItemInstance* inst, bool pickup);
 
 	int GetItemLinkHash(const EQEmu::ItemInstance* inst); // move to ItemData..or make use of the pre-calculated database field
 
@@ -958,23 +958,7 @@ public:
 	void SendRules(Client* client);
 	std::list<std::string> consent_list;
 
-	//Anti-Cheat Stuff
-	uint32 m_TimeSinceLastPositionCheck;
-	float m_DistanceSinceLastPositionCheck;
-	bool m_CheatDetectMoved;
-	void SetShadowStepExemption(bool v);
-	void SetKnockBackExemption(bool v);
-	void SetPortExemption(bool v);
-	void SetSenseExemption(bool v) { m_SenseExemption = v; }
-	void SetAssistExemption(bool v) { m_AssistExemption = v; }
-	const bool IsShadowStepExempted() const { return m_ShadowStepExemption; }
-	const bool IsKnockBackExempted() const { return m_KnockBackExemption; }
-	const bool IsPortExempted() const { return m_PortExemption; }
-	const bool IsSenseExempted() const { return m_SenseExemption; }
-	const bool IsAssistExempted() const { return m_AssistExemption; }
 	const bool GetGMSpeed() const { return (gmspeed > 0); }
-	void CheatDetected(CheatTypes CheatType, float x, float y, float z);
-	const bool IsMQExemptedArea(uint32 zoneID, float x, float y, float z) const;
 	bool CanUseReport;
 
 	//This is used to later set the buff duration of the spell, in slot to duration.
@@ -1152,7 +1136,6 @@ public:
 	inline bool IsDraggingCorpse() { return (DraggedCorpses.size() > 0); }
 	void DragCorpses();
 	inline void ClearDraggedCorpses() { DraggedCorpses.clear(); }
-	inline void ResetPositionTimer() { position_timer_counter = 0; }
 	void SendAltCurrencies();
 	void SetAlternateCurrencyValue(uint32 currency_id, uint32 new_amount);
 	void AddAlternateCurrencyValue(uint32 currency_id, int32 amount, int8 method = 0);
@@ -1164,7 +1147,7 @@ public:
 	void HandleLFGuildResponse(ServerPacket *pack);
 	void SendLFGuildStatus();
 	void SendGuildLFGuildStatus();
-	inline bool XTargettingAvailable() const { return ((m_ClientVersionBit & EQEmu::versions::bit_UFAndLater) && RuleB(Character, EnableXTargetting)); }
+	inline bool XTargettingAvailable() const { return ((m_ClientVersionBit & EQEmu::versions::maskUFAndLater) && RuleB(Character, EnableXTargetting)); }
 	inline uint8 GetMaxXTargets() const { return MaxXTargets; }
 	void SetMaxXTargets(uint8 NewMax);
 	bool IsXTarget(const Mob *m) const;
@@ -1188,7 +1171,7 @@ public:
 	bool GroupFollow(Client* inviter);
 	inline bool  GetRunMode() const { return runmode; }
 
-	inline bool AggroMeterAvailable() const { return ((m_ClientVersionBit & EQEmu::versions::bit_RoF2AndLater)) && RuleB(Character, EnableAggroMeter); } // RoF untested
+	inline bool AggroMeterAvailable() const { return ((m_ClientVersionBit & EQEmu::versions::maskRoF2AndLater)) && RuleB(Character, EnableAggroMeter); } // RoF untested
 	inline void SetAggroMeterLock(int in) { m_aggrometer.set_lock_id(in); }
 
 	void ProcessAggroMeter(); // builds packet and sends
@@ -1309,6 +1292,9 @@ public:
 
 	uint32 trapid; //ID of trap player has triggered. This is cleared when the player leaves the trap's radius, or it despawns.
 
+	void SetLastPositionBeforeBulkUpdate(glm::vec4 in_last_position_before_bulk_update);
+	glm::vec4 &GetLastPositionBeforeBulkUpdate();
+
 protected:
 	friend class Mob;
 	void CalcItemBonuses(StatBonuses* newbon);
@@ -1413,6 +1399,7 @@ private:
 	uint32 WID;
 	uint32 account_id;
 	char account_name[30];
+	char loginserver[64];
 	uint32 lsaccountid;
 	char lskey[30];
 	int16 admin;
@@ -1458,6 +1445,9 @@ private:
 	int Haste; //precalced value
 	uint32 tmSitting; // time stamp started sitting, used for HP regen bonus added on MAY 5, 2004
 
+	bool display_mob_info_window;
+	bool dev_tools_window_enabled;
+
 	int32 max_end;
 	int32 current_endurance;
 
@@ -1496,9 +1486,6 @@ private:
 
 	WaterRegionType last_region_type;
 
-	Timer position_timer;
-	uint8 position_timer_counter;
-
 	// this is used to try to cut back on position update reflections
 	int position_update_same_count;
 
@@ -1517,6 +1504,7 @@ private:
 	Timer forget_timer; // our 2 min everybody forgets you timer
 	Timer autosave_timer;
 	Timer client_scan_npc_aggro_timer;
+	Timer client_zone_wide_full_position_update_timer;
 	Timer tribute_timer;
 
 	Timer proximity_timer;
@@ -1539,7 +1527,7 @@ private:
 	Timer position_update_timer; /* Timer used when client hasn't updated within a 10 second window */
 
 	glm::vec3 m_Proximity;
-	glm::vec4 last_major_update_position;
+	glm::vec4 last_position_before_bulk_update;
 
 	void BulkSendInventoryItems();
 
@@ -1583,11 +1571,6 @@ private:
 
 	int XPRate;
 
-	bool m_ShadowStepExemption;
-	bool m_KnockBackExemption;
-	bool m_PortExemption;
-	bool m_SenseExemption;
-	bool m_AssistExemption;
 	bool alternate_currency_loaded;
 	std::map<uint32, uint32> alternate_currency;
 	std::queue<std::pair<uint32, int32>> alternate_currency_queued_operations;
@@ -1640,6 +1623,31 @@ private:
 
 	void InterrogateInventory_(bool errorcheck, Client* requester, int16 head, int16 index, const EQEmu::ItemInstance* inst, const EQEmu::ItemInstance* parent, bool log, bool silent, bool &error, int depth);
 	bool InterrogateInventory_error(int16 head, int16 index, const EQEmu::ItemInstance* inst, const EQEmu::ItemInstance* parent, int depth);
+
+	int client_max_level;
+	
+#ifdef BOTS
+	
+
+	
+
+public:
+	enum BotOwnerOption : size_t {
+		booDeathMarquee,
+		booStatsUpdate,
+		booSpawnMessageSay,
+		booSpawnMessageTell,
+		booSpawnMessageClassSpecific,
+		_booCount
+	};
+
+	bool GetBotOption(BotOwnerOption boo) const;
+	void SetBotOption(BotOwnerOption boo, bool flag = true);
+	
+private:
+	bool bot_owner_options[_booCount];
+
+#endif
 };
 
 #endif

@@ -6,16 +6,8 @@
 #EQEMU_DISABLE_SAFESEH
 #EQEMU_BUILD_MSVC_MP
 #EQEMU_DEBUG_LEVEL
-#EQEMU_LOG_LEVEL_STATUS
-#EQEMU_LOG_LEVEL_NORMAL
-#EQEMU_LOG_LEVEL_ERROR
 #EQEMU_LOG_LEVEL_DEBUG
-#EQEMU_LOG_LEVEL_QUEST
-#EQEMU_LOG_LEVEL_COMMANDS
-#EQEMU_LOG_LEVEL_CRASH
-#EQEMU_DEPOP_INVALIDATES_CACHE
 #EQEMU_ENABLE_BOTS
-#EQEMU_DISABLE_LOGSYS
 #EQEMU_COMMANDS_LOGGING
 #EQEMU_BUILD_SERVER
 #EQEMU_BUILD_LOGIN
@@ -26,8 +18,13 @@
 #EQEMU_BUILD_CLIENT_FILES
 #EQEMU_USE_MAP_MMFS
 #EQEMU_MAP_DIR
+#EQEMU_ARCH
+#EQEMU_ARCH_ALT
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+IF(POLICY CMP0074)
+	cmake_policy(SET CMP0074 NEW)
+ENDIF()
 
 #FindMySQL is located here so lets make it so CMake can find it
 SET(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/" ${CMAKE_MODULE_PATH})
@@ -54,33 +51,37 @@ ENDIF(MSVC OR MINGW)
 
 IF(MSVC)
 	IF(CMAKE_CL_64)
-		SET(ZLIB_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zlib_x64")
-		SET(MYSQL_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/mysql_x64")
-		SET(LUA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/luaj_x64")
-		SET(OPENSSL_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/openssl_x64")
-		SET(SODIUM_INCLUDE_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/include")
-		IF(MSVC_VERSION GREATER 1800)
-			SET(SODIUM_LIBRARY_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/x64/Release/v140/dynamic")
-		ELSEIF(MSVC_VERSION EQUAL 1800)
-			SET(SODIUM_LIBRARY_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/x64/Release/v120/dynamic")
-		ELSE()
-			SET(SODIUM_LIBRARY_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/x64/Release/v110/dynamic")
-		ENDIF()
+		SET(EQEMU_ARCH "x64")
+		SET(EQEMU_ARCH_ALT "x64")
 	ELSE(CMAKE_CL_64)
-		SET(ZLIB_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zlib_x86")
-		SET(MYSQL_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/mysql_x86")
-		SET(LUA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/luaj_x86")
-		SET(SODIUM_INCLUDE_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/include")
-		SET(OPENSSL_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/openssl_x86")
-		IF(MSVC_VERSION GREATER 1800)
-			SET(SODIUM_LIBRARY_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/Win32/Release/v140/dynamic")
-		ELSEIF(MSVC_VERSION EQUAL 1800)
-			SET(SODIUM_LIBRARY_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/Win32/Release/v120/dynamic")
-		ELSE()
-			SET(SODIUM_LIBRARY_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/Win32/Release/v110/dynamic")
-		ENDIF()
+		SET(EQEMU_ARCH "x86")
+		SET(EQEMU_ARCH_ALT "Win32")
 	ENDIF(CMAKE_CL_64)
-
+	
+	SET(MYSQL_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/mysql_${EQEMU_ARCH}")
+	
+	IF(VCPKG_TOOLCHAIN)
+		IF(NOT MSVC_VERSION GREATER 1800)
+			SET(SODIUM_INCLUDE_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/include")
+		ENDIF()
+	ELSE(VCPKG_TOOLCHAIN)
+		SET(ZLIB_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/zlib_${EQEMU_ARCH}")
+		SET(LUA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/luaj_${EQEMU_ARCH}")
+		SET(OPENSSL_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/openssl_${EQEMU_ARCH}")
+		
+		SET(SODIUM_INCLUDE_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/include")
+	ENDIF(VCPKG_TOOLCHAIN)
+	
+	IF(SODIUM_INCLUDE_HINTS)
+		IF(MSVC_VERSION GREATER 1800)
+			SET(SODIUM_LIBRARY_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/${EQEMU_ARCH_ALT}/Release/v140/dynamic")
+		ELSEIF(MSVC_VERSION EQUAL 1800)
+			SET(SODIUM_LIBRARY_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/${EQEMU_ARCH_ALT}/Release/v120/dynamic")
+		ELSE()
+			SET(SODIUM_LIBRARY_HINTS "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libsodium/${EQEMU_ARCH_ALT}/Release/v110/dynamic")
+		ENDIF()
+	ENDIF(SODIUM_INCLUDE_HINTS)
+	
 	#disable CRT warnings on windows cause they're annoying as shit and we use C functions everywhere
 	OPTION(EQEMU_DISABLE_CRT_SECURE_WARNINGS "Disable Secure CRT Warnings" ON)
 	IF(EQEMU_DISABLE_CRT_SECURE_WARNINGS)
@@ -141,36 +142,6 @@ SET(EQEMU_DEBUG_LEVEL 5 CACHE STRING "EQEmu debug level:
 	10 - More errors than you ever wanted to see"
 )
 
-SET(EQEMU_LOG_LEVEL_STATUS 2 CACHE STRING "EQEmu logging level for [Status]:
-	0 - Disabled
-	1 - Ouput to File Enabled
-	2 - Output to stdout Enabled
-	3 - Output to File and stdout Enabled
-	8 - Output to stderr Enabled
-	9 - Output to File and stderr Enabled
-	11 - Output to File, stdout and stderr Enabled"
-)
-
-SET(EQEMU_LOG_LEVEL_NORMAL 3 CACHE STRING "EQEmu logging level for [Normal]:
-	0 - Disabled
-	1 - Ouput to File Enabled
-	2 - Output to stdout Enabled
-	3 - Output to File and stdout Enabled
-	8 - Output to stderr Enabled
-	9 - Output to File and stderr Enabled
-	11 - Output to File, stdout and stderr Enabled"
-)
-
-SET(EQEMU_LOG_LEVEL_ERROR 2 CACHE STRING "EQEmu logging level for [Error]:
-	0 - Disabled
-	1 - Ouput to File Enabled
-	2 - Output to stdout Enabled
-	3 - Output to File and stdout Enabled
-	8 - Output to stderr Enabled
-	9 - Output to File and stderr Enabled
-	11 - Output to File, stdout and stderr Enabled"
-)
-
 SET(EQEMU_LOG_LEVEL_DEBUG 3 CACHE STRING "EQEmu logging level for [Debug]:
 	0 - Disabled
 	1 - Ouput to File Enabled
@@ -181,46 +152,13 @@ SET(EQEMU_LOG_LEVEL_DEBUG 3 CACHE STRING "EQEmu logging level for [Debug]:
 	11 - Output to File, stdout and stderr Enabled"
 )
 
-SET(EQEMU_LOG_LEVEL_QUEST 2 CACHE STRING "EQEmu logging level for [Quest]:
-	0 - Disabled
-	1 - Ouput to File Enabled
-	2 - Output to stdout Enabled
-	3 - Output to File and stdout Enabled
-	8 - Output to stderr Enabled
-	9 - Output to File and stderr Enabled
-	11 - Output to File, stdout and stderr Enabled"
-)
+OPTION(EQEMU_LSPX "" OFF)
+MARK_AS_ADVANCED(EQEMU_LSPX)
 
-SET(EQEMU_LOG_LEVEL_COMMANDS 1 CACHE STRING "EQEmu logging level for [Commands]:
-	0 - Disabled
-	1 - Ouput to File Enabled
-	2 - Output to stdout Enabled
-	3 - Output to File and stdout Enabled
-	8 - Output to stderr Enabled
-	9 - Output to File and stderr Enabled
-	11 - Output to File, stdout and stderr Enabled"
-)
-
-SET(EQEMU_LOG_LEVEL_CRASH 3 CACHE STRING "EQEmu logging level for [Crash]:
-	0 - Disabled
-	1 - Ouput to File Enabled
-	2 - Output to stdout Enabled
-	3 - Output to File and stdout Enabled
-	8 - Output to stderr Enabled
-	9 - Output to File and stderr Enabled
-	11 - Output to File, stdout and stderr Enabled"
-)
-
-MARK_AS_ADVANCED(EQEMU_LOG_LEVEL_STATUS EQEMU_LOG_LEVEL_NORMAL EQEMU_LOG_LEVEL_ERROR EQEMU_LOG_LEVEL_DEBUG EQEMU_LOG_LEVEL_QUEST EQEMU_LOG_LEVEL_COMMANDS EQEMU_LOG_LEVEL_CRASH)
-
-#NPC Types Cache Behavior
-OPTION(EQEMU_DEPOP_INVALIDATES_CACHE "#repop invalidates the npc_types cache (will cause a larger database hit on #repop but is more convienent)." ON)
+MARK_AS_ADVANCED(EQEMU_LOG_LEVEL_DEBUG)
 
 #Bots are a compile time option so on/off
 OPTION(EQEMU_ENABLE_BOTS "Enable Bots" OFF)
-
-#Disable entire _mlog system (excludes trade/command logs)
-OPTION(EQEMU_DISABLE_LOGSYS "Disable Logging INI System" ON)
 
 #Enable GM Command log system
 OPTION(EQEMU_COMMANDS_LOGGING "Enable GM Command logs" ON)
@@ -229,9 +167,9 @@ IF(EQEMU_COMMANDS_LOGGING)
 	ADD_DEFINITIONS(-DCOMMANDS_LOGGING)
 ENDIF(EQEMU_COMMANDS_LOGGING)
 
-IF(EQEMU_DISABLE_LOGSYS)
-	ADD_DEFINITIONS(-DDISABLE_LOGSYS)
-ENDIF(EQEMU_DISABLE_LOGSYS)
+IF(EQEMU_LSPX)
+	ADD_DEFINITIONS(-DLSPX=ON)
+ENDIF(EQEMU_LSPX)
 
 IF(EQEMU_ENABLE_BOTS)
 	ADD_DEFINITIONS(-DBOTS)
@@ -263,10 +201,11 @@ IF(EQEMU_BUILD_LUA)
 	ADD_DEFINITIONS(-DLUA_EQEMU)
 ENDIF(EQEMU_BUILD_LUA)
 
-OPTION(EQEMU_USE_MAP_MMFS "Create and use Zone Map MMF files." OFF)
-IF(EQEMU_USE_MAP_MMFS)
-	ADD_DEFINITIONS(-DUSE_MAP_MMFS)
-ENDIF(EQEMU_USE_MAP_MMFS)
+#Disabled until reevaluation performed
+#OPTION(EQEMU_USE_MAP_MMFS "Create and use Zone Map MMF files." OFF)
+#IF(EQEMU_USE_MAP_MMFS)
+#	ADD_DEFINITIONS(-DUSE_MAP_MMFS)
+#ENDIF(EQEMU_USE_MAP_MMFS)
 
 SET(EQEMU_MAP_DIR "./Maps" CACHE STRING "The dir that maps, water maps, and paths are located in.")
 
@@ -274,24 +213,20 @@ ADD_DEFINITIONS(-DEQDEBUG=${EQEMU_DEBUG_LEVEL})
 ADD_DEFINITIONS(-DINVERSEXY)
 ADD_DEFINITIONS(-DFIELD_ITEMS)
 ADD_DEFINITIONS(-DMAP_DIR="${EQEMU_MAP_DIR}")
-ADD_DEFINITIONS(-DLOG_LEVEL_STATUS=${EQEMU_LOG_LEVEL_STATUS})
-ADD_DEFINITIONS(-DLOG_LEVEL_NORMAL=${EQEMU_LOG_LEVEL_NORMAL})
-ADD_DEFINITIONS(-DLOG_LEVEL_ERROR=${EQEMU_LOG_LEVEL_ERROR})
 ADD_DEFINITIONS(-DLOG_LEVEL_DEBUG=${EQEMU_LOG_LEVEL_DEBUG})
-ADD_DEFINITIONS(-DLOG_LEVEL_QUEST=${EQEMU_LOG_LEVEL_QUEST})
-ADD_DEFINITIONS(-DLOG_LEVEL_COMMANDS=${EQEMU_LOG_LEVEL_COMMANDS})
-ADD_DEFINITIONS(-DLOG_LEVEL_CRASH=${EQEMU_LOG_LEVEL_CRASH})
 ADD_DEFINITIONS(-DGLM_FORCE_RADIANS)
+ADD_DEFINITIONS(-DGLM_FORCE_CTOR_INIT)
+ADD_DEFINITIONS(-DGLM_ENABLE_EXPERIMENTAL)
 
 #Find everything we need
-FIND_PACKAGE(ZLIB REQUIRED)
+FIND_PACKAGE(ZLIB)
 FIND_PACKAGE(MySQL REQUIRED)
 IF(EQEMU_BUILD_PERL)
 	FIND_PACKAGE(PerlLibs REQUIRED)
 	INCLUDE_DIRECTORIES(SYSTEM "${PERL_INCLUDE_PATH}")
 ENDIF(EQEMU_BUILD_PERL)
 
-SET(SERVER_LIBS common debug ${MySQL_LIBRARY_DEBUG} optimized ${MySQL_LIBRARY_RELEASE} ${ZLIB_LIBRARY} libuv fmt recast_navigation)
+SET(SERVER_LIBS common debug ${MySQL_LIBRARY_DEBUG} optimized ${MySQL_LIBRARY_RELEASE} uv_a fmt RecastNavigation::Detour)
 
 FIND_PACKAGE(Sodium REQUIRED)
 IF(SODIUM_FOUND)
@@ -301,6 +236,23 @@ IF(SODIUM_FOUND)
 		ADD_DEFINITIONS(-DENABLE_SECURITY)
 		SET(SERVER_LIBS ${SERVER_LIBS} ${SODIUM_LIBRARIES})
 	ENDIF()
+ENDIF()
+
+IF(ZLIB_FOUND)
+	OPTION(EQEMU_BUILD_ZLIB "Build internal version of zlib." OFF)
+	
+	IF(EQEMU_BUILD_ZLIB)
+		INCLUDE_DIRECTORIES(BEFORE SYSTEM "${CMAKE_CURRENT_BINARY_DIR}/libs/zlibng" "${CMAKE_CURRENT_SOURCE_DIR}/libs/zlibng")
+		SET(SERVER_LIBS ${SERVER_LIBS} "zlibstatic")
+	ELSE()
+		INCLUDE_DIRECTORIES(SYSTEM "${ZLIB_INCLUDE_DIRS}")
+		SET(SERVER_LIBS ${SERVER_LIBS} ${ZLIB_LIBRARY})
+	ENDIF()
+ELSE()
+	MESSAGE(STATUS "Could NOT find ZLIB - using ZLIBSTATIC package.")
+	SET(EQEMU_BUILD_ZLIB ON)
+	INCLUDE_DIRECTORIES(BEFORE SYSTEM "${CMAKE_CURRENT_BINARY_DIR}/libs/zlibng" "${CMAKE_CURRENT_SOURCE_DIR}/libs/zlibng")
+	SET(SERVER_LIBS ${SERVER_LIBS} "zlibstatic")
 ENDIF()
 
 IF(WIN32)
@@ -332,19 +284,34 @@ IF(EQEMU_BUILD_LUA)
 	ENDIF(EQEMU_SANITIZE_LUA_LIBS)
 ENDIF(EQEMU_BUILD_LUA)
 
-INCLUDE_DIRECTORIES(SYSTEM "${ZLIB_INCLUDE_DIRS}")
 INCLUDE_DIRECTORIES(SYSTEM "${MySQL_INCLUDE_DIR}")
-INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/common/glm")
-INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/libs/cereal")
-INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/libs/libuv/include" )
-INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/libs/libuv/src")
-INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/libs/format")
-INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/libs/recast/detour/include")
-INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/libs/recast/recast/include")
+INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/submodules/glm")
+INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/submodules/cereal/include")
+INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/submodules/fmt/include")
+INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/submodules/libuv/include" )
+INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/submodules/recastnavigation/DebugUtils/Include")
+INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/submodules/recastnavigation/Detour/Include")
+INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/submodules/recastnavigation/DetourCrowd/Include")
+INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/submodules/recastnavigation/DetourTileCache/Include")
+INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/submodules/recastnavigation/Recast/Include")
+INCLUDE_DIRECTORIES(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/submodules/websocketpp")
 
 IF(EQEMU_BUILD_SERVER OR EQEMU_BUILD_LOGIN OR EQEMU_BUILD_TESTS OR EQEMU_BUILD_HC)
 	ADD_SUBDIRECTORY(common)
 	ADD_SUBDIRECTORY(libs)
+	ADD_SUBDIRECTORY(submodules/fmt)
+	ADD_SUBDIRECTORY(submodules/libuv)
+
+	SET(RECASTNAVIGATION_DEMO OFF CACHE BOOL "Build demo")
+	SET(RECASTNAVIGATION_TESTS OFF CACHE BOOL "Build tests")
+	SET(RECASTNAVIGATION_EXAMPLES OFF CACHE BOOL "Build examples")
+	ADD_SUBDIRECTORY(submodules/recastnavigation)
+	
+	IF(EQEMU_BUILD_ZLIB)
+		SET(ZLIB_COMPAT ON CACHE BOOL "Compile with zlib compatible API")
+		SET(ZLIB_ENABLE_TESTS OFF CACHE BOOL "Build test binaries")
+		ADD_SUBDIRECTORY(libs/zlibng)
+	ENDIF()
 ENDIF(EQEMU_BUILD_SERVER OR EQEMU_BUILD_LOGIN OR EQEMU_BUILD_TESTS OR EQEMU_BUILD_HC)
 IF(EQEMU_BUILD_SERVER)
 	ADD_SUBDIRECTORY(shared_memory)

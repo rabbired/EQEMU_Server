@@ -62,8 +62,7 @@ public:
 
 	//quest functions
 	void echo(int colour, const char *str);
-	void say(const char *str);
-	void say(const char *str, uint8 language);
+	void say(const char *str, Journal::Options &opts);
 	void me(const char *str);
 	void summonitem(uint32 itemid, int16 charges = -1);
 	void write(const char *file, const char *str);
@@ -234,10 +233,13 @@ public:
 	uint32 GetInstanceTimerByID(uint16 instance_id = 0);
 	void DestroyInstance(uint16 instance_id);
 	uint16 GetInstanceID(const char *zone, int16 version);
+	uint16 GetInstanceIDByCharID(const char *zone, int16 version, uint32 char_id);
 	void AssignToInstance(uint16 instance_id);
+	void AssignToInstanceByCharID(uint16 instance_id, uint32 char_id);
 	void AssignGroupToInstance(uint16 instance_id);
 	void AssignRaidToInstance(uint16 instance_id);
 	void RemoveFromInstance(uint16 instance_id);
+	void RemoveFromInstanceByCharID(uint16 instance_id, uint32 char_id);
 	//void RemoveGroupFromInstance(uint16 instance_id);	//potentially useful but not implmented at this time.
 	//void RemoveRaidFromInstance(uint16 instance_id);	//potentially useful but not implmented at this time.
 	void RemoveAllFromInstance(uint16 instance_id);
@@ -245,11 +247,11 @@ public:
 	void FlagInstanceByGroupLeader(uint32 zone, int16 version);
 	void FlagInstanceByRaidLeader(uint32 zone, int16 version);
 	const char* varlink(char* perltext, int item_id);
-	const char* saylink(char* Phrase, bool silent, const char* LinkName);
+	std::string saylink(char *saylink_text, bool silent, const char *link_name);
 	const char* getguildnamebyid(int guild_id);
 	void SetRunning(bool val);
 	bool IsRunning();
-	void FlyMode(uint8 flymode);
+	void FlyMode(GravityBehavior flymode);
 	uint8 FactionValue();
 	void wearchange(uint8 slot, uint16 texture, uint32 hero_forge_model = 0, uint32 elite_material = 0);
 	void voicetell(const char *str, int macronum, int racenum, int gendernum);

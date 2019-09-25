@@ -154,30 +154,17 @@ void QuestManager::echo(int colour, const char *str) {
 	entity_list.MessageClose(initiator, false, 200, colour, str);
 }
 
-void QuestManager::say(const char *str) {
+void QuestManager::say(const char *str, Journal::Options &opts) {
 	QuestManagerCurrentQuestVars();
 	if (!owner) {
-		Log(Logs::General, Logs::Quests, "QuestManager::say called with nullptr owner. Probably syntax error in quest file.");
+		LogQuests("QuestManager::say called with nullptr owner. Probably syntax error in quest file");
 		return;
 	}
 	else {
-		if(RuleB(NPC, EnableNPCQuestJournal) && initiator) {
-			owner->QuestJournalledSay(initiator, str);
-		}
-		else {
-			owner->Say(str);
-		}
-	}
-}
-
-void QuestManager::say(const char *str, uint8 language) {
-	QuestManagerCurrentQuestVars();
-	if (!owner) {
-		Log(Logs::General, Logs::Quests, "QuestManager::say called with nullptr owner. Probably syntax error in quest file.");
-		return;
-	}
-	else {
-		entity_list.ChannelMessage(owner, 8, language, str);
+		// if there is no initiator we still want stuff to work (timers, signals, waypoints, etc)
+		if (!RuleB(NPC, EnableNPCQuestJournal) || initiator == nullptr)
+			opts.journal_mode = Journal::Mode::None;
+		owner->QuestJournalledSay(initiator, str, opts);
 	}
 }
 
@@ -208,7 +195,7 @@ Mob* QuestManager::spawn2(int npc_type, int grid, int unused, const glm::vec4& p
 	const NPCType* tmp = 0;
 	if (tmp = database.LoadNPCTypesData(npc_type))
 	{
-		auto npc = new NPC(tmp, nullptr, position, FlyMode3);
+		auto npc = new NPC(tmp, nullptr, position, GravityBehavior::Water);
 		npc->AddLootTable();
 		if (npc->DropsGlobalLoot())
 			npc->CheckGlobalLootTables();
@@ -217,7 +204,7 @@ Mob* QuestManager::spawn2(int npc_type, int grid, int unused, const glm::vec4& p
 		{
 			npc->AssignWaypoints(grid);
 		}
-		npc->SendPositionUpdate();
+
 		return npc;
 	}
 	return nullptr;
@@ -232,7 +219,7 @@ Mob* QuestManager::unique_spawn(int npc_type, int grid, int unused, const glm::v
 	const NPCType* tmp = 0;
 	if (tmp = database.LoadNPCTypesData(npc_type))
 	{
-		auto npc = new NPC(tmp, nullptr, position, FlyMode3);
+		auto npc = new NPC(tmp, nullptr, position, GravityBehavior::Water);
 		npc->AddLootTable();
 		if (npc->DropsGlobalLoot())
 			npc->CheckGlobalLootTables();
@@ -241,65 +228,63 @@ Mob* QuestManager::unique_spawn(int npc_type, int grid, int unused, const glm::v
 		{
 			npc->AssignWaypoints(grid);
 		}
-		npc->SendPositionUpdate();
+
 		return npc;
 	}
 	return nullptr;
 }
 
-Mob* QuestManager::spawn_from_spawn2(uint32 spawn2_id)
+Mob *QuestManager::spawn_from_spawn2(uint32 spawn2_id)
 {
-	LinkedListIterator<Spawn2*> iterator(zone->spawn2_list);
+	LinkedListIterator<Spawn2 *> iterator(zone->spawn2_list);
 	iterator.Reset();
 	Spawn2 *found_spawn = nullptr;
 
-	while(iterator.MoreElements())
-	{
-		Spawn2* cur = iterator.GetData();
+	while (iterator.MoreElements()) {
+		Spawn2 *cur = iterator.GetData();
 		iterator.Advance();
-		if(cur->GetID() == spawn2_id)
-		{
+		if (cur->GetID() == spawn2_id) {
 			found_spawn = cur;
 			break;
 		}
 	}
 
-	if(found_spawn)
-	{
-		SpawnGroup* sg = zone->spawn_group_list.GetSpawnGroup(found_spawn->SpawnGroupID());
-		if(!sg)
-		{
-			database.LoadSpawnGroupsByID(found_spawn->SpawnGroupID(),&zone->spawn_group_list);
-			sg = zone->spawn_group_list.GetSpawnGroup(found_spawn->SpawnGroupID());
-			if(!sg)
-			{
-				return nullptr;
-			}
-		}
-		uint32 npcid = sg->GetNPCType();
-		if(npcid == 0)
-		{
-			return nullptr;
-		}
-
-		const NPCType* tmp = database.LoadNPCTypesData(npcid);
-		if(!tmp)
-		{
-			return nullptr;
-		}
-
-		if(tmp->unique_spawn_by_name)
-		{
-			if(!entity_list.LimitCheckName(tmp->name))
-			{
+	if (found_spawn) {
+		SpawnGroup *spawn_group = zone->spawn_group_list.GetSpawnGroup(found_spawn->SpawnGroupID());
+		if (!spawn_group) {
+			database.LoadSpawnGroupsByID(found_spawn->SpawnGroupID(), &zone->spawn_group_list);
+			spawn_group = zone->spawn_group_list.GetSpawnGroup(found_spawn->SpawnGroupID());
+			if (!spawn_group) {
 				return nullptr;
 			}
 		}
 
-		if(tmp->spawn_limit > 0)
-		{
-			if(!entity_list.LimitCheckType(npcid, tmp->spawn_limit))
-			{
+		uint16 condition_value=1;
+		uint16 condition_id=found_spawn->GetSpawnCondition();
+
+		if (condition_id > 0) {
+			condition_value = zone->spawn_conditions.GetCondition(zone->GetShortName(), zone->GetInstanceID(), condition_id);
+		}
+
+		uint32 npcid = spawn_group->GetNPCType(condition_value);
+
+		if (npcid == 0) {
+			return nullptr;
+		}
+
+		const NPCType *tmp = database.LoadNPCTypesData(npcid);
+		if (!tmp) {
+			return nullptr;
+		}
+
+		if (tmp->unique_spawn_by_name) {
+			if (!entity_list.LimitCheckName(tmp->name)) {
+				return nullptr;
+			}
+		}
+
+		if (tmp->spawn_limit > 0) {
+			if (!entity_list.LimitCheckType(npcid, tmp->spawn_limit)) {
 				return nullptr;
 			}
 		}
@@ -307,23 +292,37 @@ Mob* QuestManager::spawn_from_spawn2(uint32 spawn2_id)
 		database.UpdateRespawnTime(spawn2_id, zone->GetInstanceID(), 0);
 		found_spawn->SetCurrentNPCID(npcid);
 
-        auto position = glm::vec4(found_spawn->GetX(), found_spawn->GetY(), found_spawn->GetZ(), found_spawn->GetHeading());
-	auto npc = new NPC(tmp, found_spawn, position, FlyMode3);
+		auto position = glm::vec4(
+			found_spawn->GetX(),
+			found_spawn->GetY(),
+			found_spawn->GetZ(),
+			found_spawn->GetHeading()
+		);
 
-	found_spawn->SetNPCPointer(npc);
-	npc->AddLootTable();
-	if (npc->DropsGlobalLoot())
-		npc->CheckGlobalLootTables();
-	npc->SetSp2(found_spawn->SpawnGroupID());
-	entity_list.AddNPC(npc);
-	entity_list.LimitAddNPC(npc);
+		auto npc = new NPC(tmp, found_spawn, position, GravityBehavior::Water);
 
-	if (sg->roamdist && sg->roambox[0] && sg->roambox[1] && sg->roambox[2] && sg->roambox[3] && sg->delay &&
-	    sg->min_delay)
-		npc->AI_SetRoambox(sg->roamdist, sg->roambox[0], sg->roambox[1], sg->roambox[2], sg->roambox[3],
-				   sg->delay, sg->min_delay);
-	if (zone->InstantGrids()) {
-		found_spawn->LoadGrid();
+		found_spawn->SetNPCPointer(npc);
+		npc->AddLootTable();
+		if (npc->DropsGlobalLoot()) {
+			npc->CheckGlobalLootTables();
+		}
+		npc->SetSpawnGroupId(found_spawn->SpawnGroupID());
+		entity_list.AddNPC(npc);
+		entity_list.LimitAddNPC(npc);
+
+		if (spawn_group->roamdist > 0) {
+			npc->AI_SetRoambox(
+				spawn_group->roamdist,
+				spawn_group->roambox[0],
+				spawn_group->roambox[1],
+				spawn_group->roambox[2],
+				spawn_group->roambox[3],
+				spawn_group->delay,
+				spawn_group->min_delay
+			);
+		}
+		if (zone->InstantGrids()) {
+			found_spawn->LoadGrid();
 		}
 
 		return npc;
@@ -371,14 +370,14 @@ void QuestManager::castspell(int spell_id, int target_id) {
 	if (owner) {
 		Mob *tgt = entity_list.GetMob(target_id);
 		if(tgt != nullptr)
-			owner->SpellFinished(spell_id, tgt, EQEmu::CastingSlot::Item, 0, -1, spells[spell_id].ResistDiff);
+			owner->SpellFinished(spell_id, tgt, EQEmu::spells::CastingSlot::Item, 0, -1, spells[spell_id].ResistDiff);
 	}
 }
 
 void QuestManager::selfcast(int spell_id) {
 	QuestManagerCurrentQuestVars();
 	if (initiator)
-		initiator->SpellFinished(spell_id, initiator, EQEmu::CastingSlot::Item, 0, -1, spells[spell_id].ResistDiff);
+		initiator->SpellFinished(spell_id, initiator, EQEmu::spells::CastingSlot::Item, 0, -1, spells[spell_id].ResistDiff);
 }
 
 void QuestManager::addloot(int item_id, int charges, bool equipitem, int aug1, int aug2, int aug3, int aug4, int aug5, int aug6) {
@@ -568,7 +567,7 @@ void QuestManager::pausetimer(const char *timer_name) {
 	{
 		if (pcur->owner && pcur->owner == owner && pcur->name == timer_name)
 		{
-			Log(Logs::General, Logs::Quests, "Timer %s is already paused for %s. Returning...", timer_name, owner->GetName());
+			LogQuests("Timer [{}] is already paused for [{}]. Returning", timer_name, owner->GetName());
 			return;
 		}
 		++pcur;
@@ -590,7 +589,7 @@ void QuestManager::pausetimer(const char *timer_name) {
 	pt.name = timername;
 	pt.owner = owner;
 	pt.time = milliseconds;
-	Log(Logs::General, Logs::Quests, "Pausing timer %s for %s with %d ms remaining.", timer_name, owner->GetName(), milliseconds);
+	LogQuests("Pausing timer [{}] for [{}] with [{}] ms remaining", timer_name, owner->GetName(), milliseconds);
 	PTimerList.push_back(pt);
 }
 
@@ -616,7 +615,7 @@ void QuestManager::resumetimer(const char *timer_name) {
 
 	if (milliseconds == 0)
 	{
-		Log(Logs::General, Logs::Quests, "Paused timer %s not found or has expired. Returning...", timer_name);
+		LogQuests("Paused timer [{}] not found or has expired. Returning", timer_name);
 		return;
 	}
 
@@ -627,14 +626,14 @@ void QuestManager::resumetimer(const char *timer_name) {
 		{
 			cur->Timer_.Enable();
 			cur->Timer_.Start(milliseconds, false);
-			Log(Logs::General, Logs::Quests, "Resuming timer %s for %s with %d ms remaining.", timer_name, owner->GetName(), milliseconds);
+			LogQuests("Resuming timer [{}] for [{}] with [{}] ms remaining", timer_name, owner->GetName(), milliseconds);
 			return;
 		}
 		++cur;
 	}
 
 	QTimerList.push_back(QuestTimer(milliseconds, owner, timer_name));
-	Log(Logs::General, Logs::Quests, "Creating a new timer and resuming %s for %s with %d ms remaining.", timer_name, owner->GetName(), milliseconds);
+	LogQuests("Creating a new timer and resuming [{}] for [{}] with [{}] ms remaining", timer_name, owner->GetName(), milliseconds);
 
 }
 
@@ -659,7 +658,7 @@ bool QuestManager::ispausedtimer(const char *timer_name) {
 void QuestManager::emote(const char *str) {
 	QuestManagerCurrentQuestVars();
 	if (!owner) {
-		Log(Logs::General, Logs::Quests, "QuestManager::emote called with nullptr owner. Probably syntax error in quest file.");
+		LogQuests("QuestManager::emote called with nullptr owner. Probably syntax error in quest file");
 		return;
 	}
 	else {
@@ -670,7 +669,7 @@ void QuestManager::emote(const char *str) {
 void QuestManager::shout(const char *str) {
 	QuestManagerCurrentQuestVars();
 	if (!owner) {
-		Log(Logs::General, Logs::Quests, "QuestManager::shout called with nullptr owner. Probably syntax error in quest file.");
+		LogQuests("QuestManager::shout called with nullptr owner. Probably syntax error in quest file");
 		return;
 	}
 	else {
@@ -681,7 +680,7 @@ void QuestManager::shout(const char *str) {
 void QuestManager::shout2(const char *str) {
 	QuestManagerCurrentQuestVars();
 	if (!owner) {
-		Log(Logs::General, Logs::Quests, "QuestManager::shout2 called with nullptr owner. Probably syntax error in quest file.");
+		LogQuests("QuestManager::shout2 called with nullptr owner. Probably syntax error in quest file");
 		return;
 	}
 	else {
@@ -700,7 +699,7 @@ void QuestManager::gmsay(const char *str, uint32 color, bool send_to_world, uint
 void QuestManager::depop(int npc_type) {
 	QuestManagerCurrentQuestVars();
 	if (!owner || !owner->IsNPC()) {
-		Log(Logs::General, Logs::Quests, "QuestManager::depop called with nullptr owner or non-NPC owner. Probably syntax error in quest file.");
+		LogQuests("QuestManager::depop called with nullptr owner or non-NPC owner. Probably syntax error in quest file");
 		return;
 	}
 	else {
@@ -730,7 +729,7 @@ void QuestManager::depop(int npc_type) {
 void QuestManager::depop_withtimer(int npc_type) {
 	QuestManagerCurrentQuestVars();
 	if (!owner || !owner->IsNPC()) {
-		Log(Logs::General, Logs::Quests, "QuestManager::depop_withtimer called with nullptr owner or non-NPC owner. Probably syntax error in quest file.");
+		LogQuests("QuestManager::depop_withtimer called with nullptr owner or non-NPC owner. Probably syntax error in quest file");
 		return;
 	}
 	else {
@@ -757,7 +756,7 @@ void QuestManager::depopall(int npc_type) {
 		entity_list.DepopAll(npc_type);
 	}
 	else {
-		Log(Logs::General, Logs::Quests, "QuestManager::depopall called with nullptr owner, non-NPC owner, or invalid NPC Type ID. Probably syntax error in quest file.");
+		LogQuests("QuestManager::depopall called with nullptr owner, non-NPC owner, or invalid NPC Type ID. Probably syntax error in quest file");
 	}
 }
 
@@ -766,7 +765,7 @@ void QuestManager::depopzone(bool StartSpawnTimer) {
 		zone->Depop(StartSpawnTimer);
 	}
 	else {
-		Log(Logs::General, Logs::Quests, "QuestManager::depopzone called with nullptr zone. Probably syntax error in quest file.");
+		LogQuests("QuestManager::depopzone called with nullptr zone. Probably syntax error in quest file");
 	}
 }
 
@@ -775,7 +774,7 @@ void QuestManager::repopzone() {
 		zone->Repop();
 	}
 	else {
-		Log(Logs::General, Logs::Quests, "QuestManager::repopzone called with nullptr zone. Probably syntax error in quest file.");
+		LogQuests("QuestManager::repopzone called with nullptr zone. Probably syntax error in quest file");
 	}
 }
 
@@ -818,13 +817,13 @@ void QuestManager::changedeity(int diety_id) {
 		if(initiator->IsClient())
 		{
 			initiator->SetDeity(diety_id);
-			initiator->Message(15,"Your Deity has been changed/set to: %i", diety_id);
+			initiator->Message(Chat::Yellow,"Your Deity has been changed/set to: %i", diety_id);
 			initiator->Save(1);
-			initiator->Kick();
+			initiator->Kick("Deity change by QuestManager");
 		}
 		else
 		{
-			initiator->Message(15,"Error changing Deity");
+			initiator->Message(Chat::Yellow,"Error changing Deity");
 		}
 	}
 }
@@ -940,11 +939,11 @@ void QuestManager::surname(const char *name) {
 		if(initiator->IsClient())
 		{
 			initiator->ChangeLastName(name);
-			initiator->Message(15,"Your surname has been changed/set to: %s", name);
+			initiator->Message(Chat::Yellow,"Your surname has been changed/set to: %s", name);
 		}
 		else
 		{
-			initiator->Message(15,"Error changing/setting surname");
+			initiator->Message(Chat::Yellow,"Error changing/setting surname");
 		}
 	}
 }
@@ -954,7 +953,7 @@ void QuestManager::permaclass(int class_id) {
 	//Makes the client the class specified
 	initiator->SetBaseClass(class_id);
 	initiator->Save(2);
-	initiator->Kick();
+	initiator->Kick("Base class change by QuestManager");
 }
 
 void QuestManager::permarace(int race_id) {
@@ -962,7 +961,7 @@ void QuestManager::permarace(int race_id) {
 	//Makes the client the race specified
 	initiator->SetBaseRace(race_id);
 	initiator->Save(2);
-	initiator->Kick();
+	initiator->Kick("Base race change by QuestManager");
 }
 
 void QuestManager::permagender(int gender_id) {
@@ -970,111 +969,186 @@ void QuestManager::permagender(int gender_id) {
 	//Makes the client the gender specified
 	initiator->SetBaseGender(gender_id);
 	initiator->Save(2);
-	initiator->Kick();
+	initiator->Kick("Base gender change by QuestManager");
 }
 
 uint16 QuestManager::scribespells(uint8 max_level, uint8 min_level) {
 	QuestManagerCurrentQuestVars();
-	uint16 book_slot, count;
-	uint16 curspell;
+	int book_slot = initiator->GetNextAvailableSpellBookSlot();
+	int spell_id = 0;
+	int count = 0;
 
-	uint32 Char_ID = initiator->CharacterID();
+	uint32 char_id = initiator->CharacterID();
 	bool SpellGlobalRule = RuleB(Spells, EnableSpellGlobals);
-	bool SpellGlobalCheckResult = 0;
+	bool SpellBucketRule = RuleB(Spells, EnableSpellBuckets);
+	bool SpellGlobalCheckResult = false;
+	bool SpellBucketCheckResult = false;
 
+	for ( ; spell_id < SPDAT_RECORDS && book_slot < EQEmu::spells::SPELLBOOK_SIZE; ++spell_id) {
+		if (book_slot == -1) {
+			initiator->Message(
+				13,
+				"Unable to scribe spell %s (%i) to spellbook: no more spell book slots available.",
+				((spell_id >= 0 && spell_id < SPDAT_RECORDS) ? spells[spell_id].name : "Out-of-range"),
+				spell_id
+			);
+			
+			break;
+		}
+		if (spell_id < 0 || spell_id >= SPDAT_RECORDS) {
+			initiator->Message(Chat::Red, "FATAL ERROR: Spell id out-of-range (id: %i, min: 0, max: %i)", spell_id, SPDAT_RECORDS);
+			return count;
+		}
+		if (book_slot < 0 || book_slot >= EQEmu::spells::SPELLBOOK_SIZE) {
+			initiator->Message(Chat::Red, "FATAL ERROR: Book slot out-of-range (slot: %i, min: 0, max: %i)", book_slot, EQEmu::spells::SPELLBOOK_SIZE);
+			return count;
+		}
 
-	for(curspell = 0, book_slot = initiator->GetNextAvailableSpellBookSlot(), count = 0; curspell < SPDAT_RECORDS && book_slot < MAX_PP_SPELLBOOK; curspell++, book_slot = initiator->GetNextAvailableSpellBookSlot(book_slot))
-	{
-		if
-		(
-			spells[curspell].classes[WARRIOR] != 0 &&       //check if spell exists
-			spells[curspell].classes[initiator->GetPP().class_-1] <= max_level &&   //maximum level
-			spells[curspell].classes[initiator->GetPP().class_-1] >= min_level &&   //minimum level
-			spells[curspell].skill != 52 &&
-			spells[curspell].effectid[EFFECT_COUNT - 1] != 10
-		)
-		{
-			if (book_slot == -1) //no more book slots
+		while (true) {
+			if (spells[spell_id].classes[WARRIOR] == 0) // check if spell exists
 				break;
-			if(!IsDiscipline(curspell) && !initiator->HasSpellScribed(curspell)) { //isn't a discipline & we don't already have it scribed
+			if (spells[spell_id].classes[initiator->GetPP().class_ - 1] > max_level) // maximum level
+				break;
+			if (spells[spell_id].classes[initiator->GetPP().class_ - 1] < min_level) // minimum level
+				break;
+			if (spells[spell_id].skill == 52)
+				break;
+			if (spells[spell_id].effectid[EFFECT_COUNT - 1] == 10)
+				break;
+
+			uint16 spell_id_ = (uint16)spell_id;
+			if ((spell_id_ != spell_id) || (spell_id != spell_id_)) {
+				initiator->Message(Chat::Red, "FATAL ERROR: Type conversion data loss with spell_id (%i != %u)", spell_id, spell_id_);
+				return count;
+			}
+
+			if (!IsDiscipline(spell_id_) && !initiator->HasSpellScribed(spell_id)) { // isn't a discipline & we don't already have it scribed
 				if (SpellGlobalRule) {
-					// Bool to see if the character has the required QGlobal to scribe it if one exists in the Spell_Globals table
-					SpellGlobalCheckResult = initiator->SpellGlobalCheck(curspell, Char_ID);
+					// bool to see if the character has the required QGlobal to scribe it if one exists in the Spell_Globals table
+					SpellGlobalCheckResult = initiator->SpellGlobalCheck(spell_id_, char_id);
 					if (SpellGlobalCheckResult) {
-						initiator->ScribeSpell(curspell, book_slot);
-						count++;
+						initiator->ScribeSpell(spell_id_, book_slot);
+						++count;
+					}
+				}
+				else if (SpellBucketRule) {
+					// bool to see if the character has the required bucket to train it if one exists in the spell_buckets table
+					SpellBucketCheckResult = initiator->SpellBucketCheck(spell_id_, char_id);
+					if (SpellBucketCheckResult) {
+						initiator->ScribeSpell(spell_id_, book_slot);
+						++count;
 					}
 				}
 				else {
-					initiator->ScribeSpell(curspell, book_slot);
-					count++;
+					initiator->ScribeSpell(spell_id_, book_slot);
+					++count;
 				}
 			}
+
+			break;
 		}
+
+		book_slot = initiator->GetNextAvailableSpellBookSlot(book_slot);
 	}
-	return count; //how many spells were scribed successfully
+
+	return count; // how many spells were scribed successfully
 }
 
 uint16 QuestManager::traindiscs(uint8 max_level, uint8 min_level) {
 	QuestManagerCurrentQuestVars();
-	uint16 count;
-	uint16 curspell;
+	int spell_id = 0;
+	int count = 0;
 
-	uint32 Char_ID = initiator->CharacterID();
+	uint32 char_id = initiator->CharacterID();
 	bool SpellGlobalRule = RuleB(Spells, EnableSpellGlobals);
-	bool SpellGlobalCheckResult = 0;
+	bool SpellBucketRule = RuleB(Spells, EnableSpellBuckets);
+	bool SpellGlobalCheckResult = false;
+	bool SpellBucketCheckResult = false;
 
-	for(curspell = 0, count = 0; curspell < SPDAT_RECORDS; curspell++)
-	{
-		if
-		(
-			spells[curspell].classes[WARRIOR] != 0 &&	//check if spell exists
-			spells[curspell].classes[initiator->GetPP().class_-1] <= max_level &&	//maximum level
-			spells[curspell].classes[initiator->GetPP().class_-1] >= min_level &&	//minimum level
-			spells[curspell].skill != 52 &&
-			( !RuleB(Spells, UseCHAScribeHack) || spells[curspell].effectid[EFFECT_COUNT - 1] != 10 )
-		)
-		{
-			if(IsDiscipline(curspell)){
-				//we may want to come up with a function like Client::GetNextAvailableSpellBookSlot() to help speed this up a little
-				for(uint32 r = 0; r < MAX_PP_DISCIPLINES; r++) {
-					if(initiator->GetPP().disciplines.values[r] == curspell) {
-						initiator->Message(13, "You already know this discipline.");
-						break;	//continue the 1st loop
+	bool change = false;
+
+	for( ; spell_id < SPDAT_RECORDS; ++spell_id) {
+		if (spell_id < 0 || spell_id >= SPDAT_RECORDS) {
+			initiator->Message(Chat::Red, "FATAL ERROR: Spell id out-of-range (id: %i, min: 0, max: %i)", spell_id, SPDAT_RECORDS);
+			return count;
+		}
+
+		while (true) {
+			if (spells[spell_id].classes[WARRIOR] == 0) // check if spell exists
+				break;
+			if (spells[spell_id].classes[initiator->GetPP().class_ - 1] > max_level) // maximum level
+				break;
+			if (spells[spell_id].classes[initiator->GetPP().class_ - 1] < min_level) // minimum level
+				break;
+			if (spells[spell_id].skill == 52)
+				break;
+			if (RuleB(Spells, UseCHAScribeHack) && spells[spell_id].effectid[EFFECT_COUNT - 1] == 10)
+				break;
+
+			uint16 spell_id_ = (uint16)spell_id;
+			if ((spell_id_ != spell_id) || (spell_id != spell_id_)) {
+				initiator->Message(Chat::Red, "FATAL ERROR: Type conversion data loss with spell_id (%i != %u)", spell_id, spell_id_);
+				return count;
+			}
+
+			if (!IsDiscipline(spell_id_))
+				break;
+
+			for (uint32 r = 0; r < MAX_PP_DISCIPLINES; r++) {
+				if (initiator->GetPP().disciplines.values[r] == spell_id_) {
+					initiator->Message(Chat::Red, "You already know this discipline.");
+					break; // continue the 1st loop
+				}
+				else if (initiator->GetPP().disciplines.values[r] == 0) {
+					if (SpellGlobalRule) {
+						// bool to see if the character has the required QGlobal to train it if one exists in the Spell_Globals table
+						SpellGlobalCheckResult = initiator->SpellGlobalCheck(spell_id_, char_id);
+						if (SpellGlobalCheckResult) {
+							initiator->GetPP().disciplines.values[r] = spell_id_;
+							database.SaveCharacterDisc(char_id, r, spell_id_);
+							change = true;
+							initiator->Message(Chat::White, "You have learned a new discipline!");
+							++count; // success counter
+						}
+						break; // continue the 1st loop
 					}
-					else if(initiator->GetPP().disciplines.values[r] == 0) {
-						if (SpellGlobalRule) {
-							// Bool to see if the character has the required QGlobal to train it if one exists in the Spell_Globals table
-							SpellGlobalCheckResult = initiator->SpellGlobalCheck(curspell, Char_ID);
-							if (SpellGlobalCheckResult) {
-								initiator->GetPP().disciplines.values[r] = curspell;
-								database.SaveCharacterDisc(Char_ID, r, curspell);
-								initiator->SendDisciplineUpdate();
-								initiator->Message(0, "You have learned a new discipline!");
-								count++;	//success counter
-							}
-							break;	//continue the 1st loop
+					else if (SpellBucketRule) {
+						// bool to see if the character has the required bucket to train it if one exists in the spell_buckets table
+						SpellBucketCheckResult = initiator->SpellBucketCheck(spell_id_, char_id);
+						if (SpellBucketCheckResult) {
+							initiator->GetPP().disciplines.values[r] = spell_id_;
+							database.SaveCharacterDisc(char_id, r, spell_id_);
+							change = true;
+							initiator->Message(Chat::White, "You have learned a new discipline!");
+							++count;
 						}
-						else {
-							initiator->GetPP().disciplines.values[r] = curspell;
-							database.SaveCharacterDisc(Char_ID, r, curspell);
-							initiator->SendDisciplineUpdate();
-							initiator->Message(0, "You have learned a new discipline!");
-							count++;	//success counter
-							break;	//continue the 1st loop
-						}
-					}	//if we get to this point, there's already a discipline in this slot, so we skip it
+						break;
+					}
+					else {
+						initiator->GetPP().disciplines.values[r] = spell_id_;
+						database.SaveCharacterDisc(char_id, r, spell_id_);
+						change = true;;
+						initiator->Message(Chat::White, "You have learned a new discipline!");
+						++count; // success counter
+						break; // continue the 1st loop
+					}
 				}
 			}
+
+			break;
 		}
 	}
-	return count;	//how many disciplines were learned successfully
+
+	if (change)
+		initiator->SendDisciplineUpdate();
+
+	return count; // how many disciplines were learned successfully
 }
 
 void QuestManager::unscribespells() {
 	QuestManagerCurrentQuestVars();
 	initiator->UnscribeSpellAll();
-	}
+}
 
 void QuestManager::untraindiscs() {
 	QuestManagerCurrentQuestVars();
@@ -1126,7 +1200,7 @@ void QuestManager::givecash(int copper, int silver, int gold, int platinum) {
 		}
 		tmp += " pieces.";
 		if (initiator)
-			initiator->Message(MT_OOC, tmp.c_str());
+			initiator->Message(Chat::OOC, tmp.c_str());
 	}
 }
 
@@ -1347,7 +1421,7 @@ void QuestManager::itemlink(int item_id) {
 		linker.SetLinkType(EQEmu::saylink::SayLinkItemData);
 		linker.SetItemData(item);
 
-		initiator->Message(0, "%s tells you, %s", owner->GetCleanName(), linker.GenerateLink().c_str());
+		initiator->Message(Chat::White, "%s tells you, %s", owner->GetCleanName(), linker.GenerateLink().c_str());
 	}
 }
 
@@ -1686,32 +1760,33 @@ void QuestManager::respawn(int npcTypeID, int grid) {
 	const NPCType* npcType = nullptr;
 	if ((npcType = database.LoadNPCTypesData(npcTypeID)))
 	{
-		owner = new NPC(npcType, nullptr, owner->GetPosition(), FlyMode3);
+		owner = new NPC(npcType, nullptr, owner->GetPosition(), GravityBehavior::Water);
 		owner->CastToNPC()->AddLootTable();
 		if (owner->CastToNPC()->DropsGlobalLoot())
 			owner->CastToNPC()->CheckGlobalLootTables();
 		entity_list.AddNPC(owner->CastToNPC(),true,true);
 		if(grid > 0)
 			owner->CastToNPC()->AssignWaypoints(grid);
-
-		owner->SendPositionUpdate();
 	}
 }
 
-void QuestManager::set_proximity(float minx, float maxx, float miny, float maxy, float minz, float maxz, bool bSay) {
+void QuestManager::set_proximity(float minx, float maxx, float miny, float maxy, float minz, float maxz, bool bSay)
+{
 	QuestManagerCurrentQuestVars();
-	if (!owner || !owner->IsNPC())
+	if (!owner || !owner->IsNPC()) {
 		return;
+	}
 
 	entity_list.AddProximity(owner->CastToNPC());
 
-	owner->CastToNPC()->proximity->min_x = minx;
-	owner->CastToNPC()->proximity->max_x = maxx;
-	owner->CastToNPC()->proximity->min_y = miny;
-	owner->CastToNPC()->proximity->max_y = maxy;
-	owner->CastToNPC()->proximity->min_z = minz;
-	owner->CastToNPC()->proximity->max_z = maxz;
-	owner->CastToNPC()->proximity->say = bSay;
+	owner->CastToNPC()->proximity->min_x         = minx;
+	owner->CastToNPC()->proximity->max_x         = maxx;
+	owner->CastToNPC()->proximity->min_y         = miny;
+	owner->CastToNPC()->proximity->max_y         = maxy;
+	owner->CastToNPC()->proximity->min_z         = minz;
+	owner->CastToNPC()->proximity->max_z         = maxz;
+	owner->CastToNPC()->proximity->say           = bSay;
+	owner->CastToNPC()->proximity->proximity_set = true;
 }
 
 void QuestManager::clear_proximity() {
@@ -1759,7 +1834,7 @@ void QuestManager::showgrid(int grid) {
                                     "ORDER BY `number`", grid, zone->GetZoneID());
     auto results = database.QueryDatabase(query);
     if (!results.Success()) {
-        Log(Logs::General, Logs::Quests, "Error loading grid %d for showgrid(): %s", grid, results.ErrorMessage().c_str());
+        LogQuests("Error loading grid [{}] for showgrid(): [{}]", grid, results.ErrorMessage().c_str());
 		return;
     }
 
@@ -2099,44 +2174,43 @@ bool QuestManager::createBot(const char *name, const char *lastname, uint8 level
 	{
 		if(Bot::SpawnedBotCount(initiator->CharacterID()) >= MaxBotCreate)
 		{
-			initiator->Message(15,"You have the maximum number of bots allowed.");
+			initiator->Message(Chat::Yellow,"You have the maximum number of bots allowed.");
 			return false;
 		}
 
 		std::string test_name = name;
 		bool available_flag = false;
-		if(!botdb.QueryNameAvailablity(test_name, available_flag)) {
-			initiator->Message(0, "%s for '%s'", BotDatabase::fail::QueryNameAvailablity(), (char*)name);
+		if(!database.botdb.QueryNameAvailablity(test_name, available_flag)) {
+			initiator->Message(Chat::White, "%s for '%s'", BotDatabase::fail::QueryNameAvailablity(), (char*)name);
 			return false;
 		}
 		if (!available_flag) {
-			initiator->Message(0, "The name %s is already being used or is invalid. Please choose a different name.", (char*)name);
+			initiator->Message(Chat::White, "The name %s is already being used or is invalid. Please choose a different name.", (char*)name);
 			return false;
 		}
 
-		NPCType DefaultNPCTypeStruct = Bot::CreateDefaultNPCTypeStructForBot(name, lastname, level, race, botclass, gender);
-		Bot* NewBot = new Bot(DefaultNPCTypeStruct, initiator);
+		Bot* NewBot = new Bot(Bot::CreateDefaultNPCTypeStructForBot(name, lastname, level, race, botclass, gender), initiator);
 
 		if(NewBot)
 		{
 			if(!NewBot->IsValidRaceClassCombo()) {
-				initiator->Message(0, "That Race/Class combination cannot be created.");
+				initiator->Message(Chat::White, "That Race/Class combination cannot be created.");
 				return false;
 			}
 
 			if(!NewBot->IsValidName()) {
-				initiator->Message(0, "%s has invalid characters. You can use only the A-Z, a-z and _ characters in a bot name.", NewBot->GetCleanName());
+				initiator->Message(Chat::White, "%s has invalid characters. You can use only the A-Z, a-z and _ characters in a bot name.", NewBot->GetCleanName());
 				return false;
 			}
 
 			// Now that all validation is complete, we can save our newly created bot
 			if(!NewBot->Save())
 			{
-				initiator->Message(0, "Unable to save %s as a bot.", NewBot->GetCleanName());
+				initiator->Message(Chat::White, "Unable to save %s as a bot.", NewBot->GetCleanName());
 			}
 			else
 			{
-				initiator->Message(0, "%s saved as bot %u.", NewBot->GetCleanName(), NewBot->GetBotID());
+				initiator->Message(Chat::White, "%s saved as bot %u.", NewBot->GetCleanName(), NewBot->GetBotID());
 				return true;
 			}
 		}
@@ -2593,13 +2667,13 @@ uint16 QuestManager::CreateInstance(const char *zone, int16 version, uint32 dura
 		uint16 id = 0;
 		if(!database.GetUnusedInstanceID(id))
 		{
-			initiator->Message(13, "Server was unable to find a free instance id.");
+			initiator->Message(Chat::Red, "Server was unable to find a free instance id.");
 			return 0;
 		}
 
 		if(!database.CreateInstance(id, zone_id, version, duration))
 		{
-			initiator->Message(13, "Server was unable to create a new instance.");
+			initiator->Message(Chat::Red, "Server was unable to create a new instance.");
 			return 0;
 		}
 		return id;
@@ -2661,6 +2735,10 @@ uint16 QuestManager::GetInstanceID(const char *zone, int16 version)
 	return 0;
 }
 
+uint16 QuestManager::GetInstanceIDByCharID(const char *zone, int16 version, uint32 char_id) {
+	return database.GetInstanceID(zone, char_id, version);
+}
+
 void QuestManager::AssignToInstance(uint16 instance_id)
 {
 	QuestManagerCurrentQuestVars();
@@ -2668,6 +2746,10 @@ void QuestManager::AssignToInstance(uint16 instance_id)
 	{
 		database.AddClientToInstance(instance_id, initiator->CharacterID());
 	}
+}
+
+void QuestManager::AssignToInstanceByCharID(uint16 instance_id, uint32 char_id) {
+	database.AddClientToInstance(instance_id, char_id);
 }
 
 void QuestManager::AssignGroupToInstance(uint16 instance_id)
@@ -2704,10 +2786,14 @@ void QuestManager::RemoveFromInstance(uint16 instance_id)
 	if (initiator)
 	{
 		if (database.RemoveClientFromInstance(instance_id, initiator->CharacterID()))
-			initiator->Message(MT_Say, "Removed client from instance.");
+			initiator->Message(Chat::Say, "Removed client from instance.");
 		else
-			initiator->Message(MT_Say, "Failed to remove client from instance.");
+			initiator->Message(Chat::Say, "Failed to remove client from instance.");
 	}
+}
+
+void QuestManager::RemoveFromInstanceByCharID(uint16 instance_id, uint32 char_id) {
+	database.RemoveClientFromInstance(instance_id, char_id);
 }
 
 void QuestManager::RemoveAllFromInstance(uint16 instance_id)
@@ -2718,11 +2804,11 @@ void QuestManager::RemoveAllFromInstance(uint16 instance_id)
 		std::list<uint32> charid_list;
 
 		if (database.RemoveClientsFromInstance(instance_id))
-			initiator->Message(MT_Say, "Removed all players from instance.");
+			initiator->Message(Chat::Say, "Removed all players from instance.");
 		else
 		{
 			database.GetCharactersInInstance(instance_id, charid_list);
-			initiator->Message(MT_Say, "Failed to remove %i player(s) from instance.", charid_list.size()); // once the expedition system is in, this message it not relevant
+			initiator->Message(Chat::Say, "Failed to remove %i player(s) from instance.", charid_list.size()); // once the expedition system is in, this message it not relevant
 		}
 	}
 }
@@ -2761,47 +2847,11 @@ void QuestManager::FlagInstanceByRaidLeader(uint32 zone, int16 version)
 	}
 }
 
-const char* QuestManager::saylink(char* Phrase, bool silent, const char* LinkName) {
+std::string QuestManager::saylink(char *saylink_text, bool silent, const char *link_name)
+{
 	QuestManagerCurrentQuestVars();
 
-	int sayid = 0;
-
-	int sz = strlen(Phrase);
-	auto escaped_string = new char[sz * 2];
-	database.DoEscapeString(escaped_string, Phrase, sz);
-
-	// Query for an existing phrase and id in the saylink table
-	std::string query = StringFormat("SELECT `id` FROM `saylink` WHERE `phrase` = '%s'", escaped_string);
-	auto results = database.QueryDatabase(query);
-	if (results.Success()) {
-		if (results.RowCount() >= 1) {
-			for (auto row = results.begin();row != results.end(); ++row)
-				sayid = atoi(row[0]);
-		} else {
-			std::string insert_query = StringFormat("INSERT INTO `saylink` (`phrase`) VALUES ('%s')", escaped_string);
-			results = database.QueryDatabase(insert_query);
-			if (!results.Success()) {
-				Log(Logs::General, Logs::Error, "Error in saylink phrase queries", results.ErrorMessage().c_str());
-			}
-			else {
-				sayid = results.LastInsertedID();
-			}
-		}
-	}
-	safe_delete_array(escaped_string);
-
-	//Create the say link as an item link hash
-	EQEmu::SayLinkEngine linker;
-	linker.SetProxyItemID(SAYLINK_ITEM_ID);
-	if (silent)
-		linker.SetProxyAugment2ID(sayid);
-	else
-		linker.SetProxyAugment1ID(sayid);
-	linker.SetProxyText(LinkName);
-
-	strcpy(Phrase, linker.GenerateLink().c_str());
-
-	return Phrase;
+	return EQEmu::SayLinkEngine::GenerateQuestSaylink(saylink_text, silent, link_name);
 }
 
 const char* QuestManager::getguildnamebyid(int guild_id) {
@@ -2827,22 +2877,18 @@ bool QuestManager::IsRunning()
 	return owner->IsRunning();
 }
 
-void QuestManager::FlyMode(uint8 flymode)
+void QuestManager::FlyMode(GravityBehavior flymode)
 {
 	QuestManagerCurrentQuestVars();
 	if(initiator)
 	{
-		if (flymode >= 0 && flymode < 3) {
-			initiator->SendAppearancePacket(AT_Levitate, flymode);
-			return;
-		}
+		initiator->SendAppearancePacket(AT_Levitate, static_cast<int>(flymode));
+		initiator->SetFlyMode(flymode);
 	}
-	if(owner)
+	else if(owner)
 	{
-		if (flymode >= 0 && flymode < 3) {
-			owner->SendAppearancePacket(AT_Levitate, flymode);
-			return;
-		}
+		owner->SendAppearancePacket(AT_Levitate, static_cast<int>(flymode));
+		owner->SetFlyMode(flymode);
 	}
 }
 
@@ -2852,7 +2898,7 @@ uint8 QuestManager::FactionValue()
 	FACTION_VALUE oldfac;
 	uint8 newfac = 0;
 	if(initiator && owner->IsNPC()) {
-		oldfac = initiator->GetFactionLevel(initiator->GetID(), owner->GetID(), initiator->GetRace(), initiator->GetClass(), initiator->GetDeity(), owner->GetPrimaryFaction(), owner);
+		oldfac = initiator->GetFactionLevel(initiator->GetID(), owner->GetID(), initiator->GetFactionRace(), initiator->GetClass(), initiator->GetDeity(), owner->GetPrimaryFaction(), owner);
 
 		// now, reorder the faction to have it make sense (higher values are better)
 		switch (oldfac) {
@@ -2941,7 +2987,7 @@ void QuestManager::voicetell(const char *str, int macronum, int racenum, int gen
 			safe_delete(outapp);
 		}
 		else
-			Log(Logs::General, Logs::Quests, "QuestManager::voicetell from %s. Client %s not found.", owner->GetName(), str);
+			LogQuests("QuestManager::voicetell from [{}]. Client [{}] not found", owner->GetName(), str);
 	}
 }
 

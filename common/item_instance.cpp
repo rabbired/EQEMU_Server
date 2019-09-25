@@ -84,6 +84,7 @@ EQEmu::ItemInstance::ItemInstance(const ItemData* item, int16 charges) {
 	m_ornamentidfile = 0;
 	m_ornament_hero_model = 0;
 	m_recast_timestamp = 0;
+	m_new_id_file = 0;
 }
 
 EQEmu::ItemInstance::ItemInstance(SharedDatabase *db, uint32 item_id, int16 charges) {
@@ -117,6 +118,7 @@ EQEmu::ItemInstance::ItemInstance(SharedDatabase *db, uint32 item_id, int16 char
 	m_ornamentidfile = 0;
 	m_ornament_hero_model = 0;
 	m_recast_timestamp = 0;
+	m_new_id_file = 0;
 }
 
 EQEmu::ItemInstance::ItemInstance(ItemInstTypes use_type) {
@@ -138,6 +140,7 @@ EQEmu::ItemInstance::ItemInstance(ItemInstTypes use_type) {
 	m_ornamentidfile = 0;
 	m_ornament_hero_model = 0;
 	m_recast_timestamp = 0;
+	m_new_id_file = 0;
 }
 
 // Make a copy of an EQEmu::ItemInstance object
@@ -195,6 +198,7 @@ EQEmu::ItemInstance::ItemInstance(const ItemInstance& copy)
 	m_ornamentidfile = copy.m_ornamentidfile;
 	m_ornament_hero_model = copy.m_ornament_hero_model;
 	m_recast_timestamp = copy.m_recast_timestamp;
+	m_new_id_file = copy.m_new_id_file;
 }
 
 // Clean up container contents
@@ -271,17 +275,10 @@ bool EQEmu::ItemInstance::IsEquipable(int16 slot_id) const
 	if (!m_item)
 		return false;
 
-	// another "shouldn't do" fix..will be fixed in future updates (requires code and database work)
-	int16 use_slot = INVALID_INDEX;
-	if (slot_id == invslot::SLOT_POWER_SOURCE) { use_slot = invslot::slotGeneral1; }
-	if ((uint16)slot_id <= invslot::EQUIPMENT_END) { use_slot = slot_id; }
+	if (slot_id < EQEmu::invslot::EQUIPMENT_BEGIN || slot_id > EQEmu::invslot::EQUIPMENT_END)
+		return false;
 
-	if (use_slot != INVALID_INDEX) {
-		if (m_item->Slots & (1 << use_slot))
-			return true;
-	}
-
-	return false;
+	return ((m_item->Slots & (1 << slot_id)) != 0);
 }
 
 bool EQEmu::ItemInstance::IsAugmentable() const
@@ -298,20 +295,18 @@ bool EQEmu::ItemInstance::IsAugmentable() const
 }
 
 bool EQEmu::ItemInstance::AvailableWearSlot(uint32 aug_wear_slots) const {
-	// TODO: check to see if incoming 'aug_wear_slots' "switches" bit assignments like above...
-	// (if wrong, would only affect MainAmmo and MainPowerSource augments)
 	if (!m_item || !m_item->IsClassCommon())
 		return false;
 
 	int index = invslot::EQUIPMENT_BEGIN;
-	for (; index <= invslot::slotGeneral1; ++index) { // MainGeneral1 should be legacy::EQUIPMENT_END
+	for (; index <= invslot::EQUIPMENT_END; ++index) {
 		if (m_item->Slots & (1 << index)) {
 			if (aug_wear_slots & (1 << index))
 				break;
 		}
 	}
 
-	return (index < 23) ? true : false;
+	return (index <= EQEmu::invslot::EQUIPMENT_END);
 }
 
 int8 EQEmu::ItemInstance::AvailableAugmentSlot(int32 augtype) const
@@ -810,12 +805,10 @@ EQEmu::ItemInstance* EQEmu::ItemInstance::Clone() const
 }
 
 bool EQEmu::ItemInstance::IsSlotAllowed(int16 slot_id) const {
-	// 'SupportsContainers' and 'slot_id > 21' previously saw the reassigned PowerSource slot (9999 to 22) as valid
 	if (!m_item) { return false; }
 	else if (InventoryProfile::SupportsContainers(slot_id)) { return true; }
 	else if (m_item->Slots & (1 << slot_id)) { return true; }
-	else if (slot_id == invslot::SLOT_POWER_SOURCE && (m_item->Slots & (1 << 22))) { return true; } // got lazy... <watch>
-	else if (slot_id != invslot::SLOT_POWER_SOURCE && slot_id > invslot::EQUIPMENT_END) { return true; }
+	else if (slot_id > invslot::EQUIPMENT_END) { return true; } // why do we call 'InventoryProfile::SupportsContainers' with this here?
 	else { return false; }
 }
 

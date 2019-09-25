@@ -335,15 +335,6 @@ Mob *HateList::GetEntWithMostHateOnList(Mob *center, Mob *skip)
 				continue;
 			}
 
-            auto hateEntryPosition = glm::vec3(cur->entity_on_hatelist->GetX(), cur->entity_on_hatelist->GetY(), cur->entity_on_hatelist->GetZ());
-			if (center->IsNPC() && center->CastToNPC()->IsUnderwaterOnly() && zone->HasWaterMap()) {
-				if (!zone->watermap->InLiquid(hateEntryPosition)) {
-					skipped_count++;
-					++iterator;
-					continue;
-				}
-			}
-
 			if (cur->entity_on_hatelist->Sanctuary()) {
 				if (hate == -1)
 				{
@@ -474,14 +465,6 @@ Mob *HateList::GetEntWithMostHateOnList(Mob *center, Mob *skip)
 				continue;
 			}
 
-			if (center->IsNPC() && center->CastToNPC()->IsUnderwaterOnly() && zone->HasWaterMap()) {
-				if(!zone->watermap->InLiquid(glm::vec3(cur->entity_on_hatelist->GetPosition()))) {
-					skipped_count++;
-					++iterator;
-					continue;
-				}
-			}
-
 			if (cur->entity_on_hatelist != nullptr && ((cur->stored_hate_amount > hate) || cur->is_entity_frenzy))
 			{
 				top_hate = cur->entity_on_hatelist;
@@ -538,6 +521,69 @@ Mob *HateList::GetRandomEntOnHateList()
 	return (*iterator)->entity_on_hatelist;
 }
 
+Mob *HateList::GetEscapingEntOnHateList() {
+	// function is still in design stage
+
+	for (auto iter : list) {
+		if (!iter->entity_on_hatelist)
+			continue;
+
+		if (!iter->entity_on_hatelist->IsFeared())
+			continue;
+
+		if (iter->entity_on_hatelist->IsRooted())
+			continue;
+		if (iter->entity_on_hatelist->IsMezzed())
+			continue;
+		if (iter->entity_on_hatelist->IsStunned())
+			continue;
+
+		return iter->entity_on_hatelist;
+	}
+
+	return nullptr;
+}
+
+Mob *HateList::GetEscapingEntOnHateList(Mob *center, float range, bool first) {
+	// function is still in design stage
+	
+	if (!center)
+		return nullptr;
+
+	Mob *escaping_mob = nullptr;
+	float mob_distance = 0.0f;
+
+	for (auto iter : list) {
+		if (!iter->entity_on_hatelist)
+			continue;
+
+		if (!iter->entity_on_hatelist->IsFeared())
+			continue;
+
+		if (iter->entity_on_hatelist->IsRooted())
+			continue;
+		if (iter->entity_on_hatelist->IsMezzed())
+			continue;
+		if (iter->entity_on_hatelist->IsStunned())
+			continue;
+		
+		float distance_test = DistanceSquared(center->GetPosition(), iter->entity_on_hatelist->GetPosition());
+
+		if (range > 0.0f && distance_test > range)
+			continue;
+		
+		if (first)
+			return iter->entity_on_hatelist;
+		
+		if (distance_test > mob_distance) {
+			escaping_mob = iter->entity_on_hatelist;
+			mob_distance = distance_test;
+		}
+	}
+
+	return escaping_mob;
+}
+
 int32 HateList::GetEntHateAmount(Mob *in_entity, bool damage)
 {
 	struct_HateList *entity;
@@ -562,7 +608,7 @@ void HateList::PrintHateListToClient(Client *c)
 	while (iterator != list.end())
 	{
 		struct_HateList *e = (*iterator);
-		c->Message(0, "- name: %s, damage: %d, hate: %d",
+		c->Message(Chat::White, "- name: %s, damage: %d, hate: %d",
 			(e->entity_on_hatelist && e->entity_on_hatelist->GetName()) ? e->entity_on_hatelist->GetName() : "(null)",
 			e->hatelist_damage, e->stored_hate_amount);
 

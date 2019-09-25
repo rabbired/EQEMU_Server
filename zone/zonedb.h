@@ -11,6 +11,10 @@
 #include "aa_ability.h"
 #include "event_codes.h"
 
+#ifdef BOTS
+#include "bot_database.h"
+#endif
+
 class Client;
 class Corpse;
 class Merc;
@@ -271,7 +275,12 @@ public:
 	void DeleteBuyLines(uint32 CharID);
 	void UpdateBuyLine(uint32 CharID, uint32 BuySlot, uint32 Quantity);
 
-	/* General Character Related Stuff  */
+	/**
+	 ************************************************
+	 * Character
+	 ************************************************
+	 */
+
 	bool	SetServerFilters(char* name, ServerSideFilters_Struct *ssfs);
 	uint32	GetServerFilters(char* name, ServerSideFilters_Struct *ssfs);
 
@@ -284,51 +293,56 @@ public:
 	void RemoveTempFactions(Client *c);
 	void UpdateItemRecastTimestamps(uint32 char_id, uint32 recast_type, uint32 timestamp);
 
-	/* Character Data Loaders  */
-	bool	LoadCharacterFactionValues(uint32 character_id, faction_map & val_list);
-	bool	LoadCharacterSpellBook(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	LoadCharacterMemmedSpells(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	LoadCharacterLanguages(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	LoadCharacterDisciplines(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	LoadCharacterSkills(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	LoadCharacterData(uint32 character_id, PlayerProfile_Struct* pp, ExtendedProfile_Struct* m_epp);
-	bool	LoadCharacterCurrency(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	LoadCharacterBindPoint(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	LoadCharacterMaterialColor(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	LoadCharacterBandolier(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	LoadCharacterTribute(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	LoadCharacterPotions(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	LoadCharacterLeadershipAA(uint32 character_id, PlayerProfile_Struct* pp);
+	bool DeleteCharacterAAs(uint32 character_id);
+	bool DeleteCharacterBandolier(uint32 character_id, uint32 band_id);
+	bool DeleteCharacterDisc(uint32 character_id, uint32 slot_id);
+	bool DeleteCharacterDye(uint32 character_id);
+	bool DeleteCharacterLeadershipAAs(uint32 character_id);
+	bool DeleteCharacterMemorizedSpell(uint32 character_id, uint32 spell_id, uint32 slot_id);
+	bool DeleteCharacterSpell(uint32 character_id, uint32 spell_id, uint32 slot_id);
 
-	/* Character Data Saves  */
-	bool	SaveCharacterBindPoint(uint32 character_id, const BindStruct &bind, uint32 bind_num);
-	bool	SaveCharacterCurrency(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	SaveCharacterData(uint32 character_id, uint32 account_id, PlayerProfile_Struct* pp, ExtendedProfile_Struct* m_epp);
-	bool	SaveCharacterAA(uint32 character_id, uint32 aa_id, uint32 current_level, uint32 charges);
-	bool	SaveCharacterSpell(uint32 character_id, uint32 spell_id, uint32 slot_id);
-	bool	SaveCharacterMemorizedSpell(uint32 character_id, uint32 spell_id, uint32 slot_id);
-	bool	SaveCharacterMaterialColor(uint32 character_id, uint32 slot_id, uint32 color);
-	bool	SaveCharacterSkill(uint32 character_id, uint32 skill_id, uint32 value);
-	bool	SaveCharacterLanguage(uint32 character_id, uint32 lang_id, uint32 value);
-	bool	SaveCharacterDisc(uint32 character_id, uint32 slot_id, uint32 disc_id);
-	bool	SaveCharacterTribute(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	SaveCharacterBandolier(uint32 character_id, uint8 bandolier_id, uint8 bandolier_slot, uint32 item_id, uint32 icon, const char* bandolier_name);
-	bool	SaveCharacterPotionBelt(uint32 character_id, uint8 potion_id, uint32 item_id, uint32 icon);
-	bool	SaveCharacterLeadershipAA(uint32 character_id, PlayerProfile_Struct* pp);
-	bool	SaveCharacterInventorySnapshot(uint32 character_id);
+	bool LoadCharacterBandolier(uint32 character_id, PlayerProfile_Struct* pp);
+	bool LoadCharacterBindPoint(uint32 character_id, PlayerProfile_Struct* pp);
+	bool LoadCharacterCurrency(uint32 character_id, PlayerProfile_Struct* pp);
+	bool LoadCharacterData(uint32 character_id, PlayerProfile_Struct* pp, ExtendedProfile_Struct* m_epp);
+	bool LoadCharacterDisciplines(uint32 character_id, PlayerProfile_Struct* pp);
+	bool LoadCharacterFactionValues(uint32 character_id, faction_map & val_list);
+	bool LoadCharacterLanguages(uint32 character_id, PlayerProfile_Struct* pp);
+	bool LoadCharacterLeadershipAA(uint32 character_id, PlayerProfile_Struct* pp);
+	bool LoadCharacterMaterialColor(uint32 character_id, PlayerProfile_Struct* pp);
+	bool LoadCharacterMemmedSpells(uint32 character_id, PlayerProfile_Struct* pp);
+	bool LoadCharacterPotions(uint32 character_id, PlayerProfile_Struct* pp);
+	bool LoadCharacterSkills(uint32 character_id, PlayerProfile_Struct* pp);
+	bool LoadCharacterSpellBook(uint32 character_id, PlayerProfile_Struct* pp);
+	bool LoadCharacterTribute(uint32 character_id, PlayerProfile_Struct* pp);
 
-	/* Character Data Deletes   */
-	bool	DeleteCharacterSpell(uint32 character_id, uint32 spell_id, uint32 slot_id);
-	bool	DeleteCharacterMemorizedSpell(uint32 character_id, uint32 spell_id, uint32 slot_id);
-	bool	DeleteCharacterDisc(uint32 character_id, uint32 slot_id);
-	bool	DeleteCharacterBandolier(uint32 character_id, uint32 band_id);
-	bool	DeleteCharacterLeadershipAAs(uint32 character_id);
-	bool	DeleteCharacterAAs(uint32 character_id);
-	bool	DeleteCharacterDye(uint32 character_id);
+	bool SaveCharacterAA(uint32 character_id, uint32 aa_id, uint32 current_level, uint32 charges);
+	bool SaveCharacterBandolier(uint32 character_id, uint8 bandolier_id, uint8 bandolier_slot, uint32 item_id, uint32 icon, const char* bandolier_name);
+	bool SaveCharacterBindPoint(uint32 character_id, const BindStruct &bind, uint32 bind_num);
+	bool SaveCharacterCurrency(uint32 character_id, PlayerProfile_Struct* pp);
+	bool SaveCharacterData(uint32 character_id, uint32 account_id, PlayerProfile_Struct* pp, ExtendedProfile_Struct* m_epp);
+	bool SaveCharacterDisc(uint32 character_id, uint32 slot_id, uint32 disc_id);
+	bool SaveCharacterLanguage(uint32 character_id, uint32 lang_id, uint32 value);
+	bool SaveCharacterLeadershipAA(uint32 character_id, PlayerProfile_Struct* pp);
+	bool SaveCharacterMaterialColor(uint32 character_id, uint32 slot_id, uint32 color);
+	bool SaveCharacterMemorizedSpell(uint32 character_id, uint32 spell_id, uint32 slot_id);
+	bool SaveCharacterPotionBelt(uint32 character_id, uint8 potion_id, uint32 item_id, uint32 icon);
+	bool SaveCharacterSkill(uint32 character_id, uint32 skill_id, uint32 value);
+	bool SaveCharacterSpell(uint32 character_id, uint32 spell_id, uint32 slot_id);
+	bool SaveCharacterTribute(uint32 character_id, PlayerProfile_Struct* pp);
 
 	/* Character Inventory  */
 	bool	NoRentExpired(const char* name);
-
+	bool	SaveCharacterInvSnapshot(uint32 character_id);
+	int		CountCharacterInvSnapshots(uint32 character_id);
+	void	ClearCharacterInvSnapshots(uint32 character_id, bool from_now = false);
+	void	ListCharacterInvSnapshots(uint32 character_id, std::list<std::pair<uint32, int>> &is_list);
+	bool	ValidateCharacterInvSnapshotTimestamp(uint32 character_id, uint32 timestamp);
+	void	ParseCharacterInvSnapshot(uint32 character_id, uint32 timestamp, std::list<std::pair<int16, uint32>> &parse_list);
+	void	DivergeCharacterInvSnapshotFromInventory(uint32 character_id, uint32 timestamp, std::list<std::pair<int16, uint32>> &compare_list);
+	void	DivergeCharacterInventoryFromInvSnapshot(uint32 character_id, uint32 timestamp, std::list<std::pair<int16, uint32>> &compare_list);
+	bool	RestoreCharacterInvSnapshot(uint32 character_id, uint32 timestamp);
+	
 	/* Corpses  */
 	bool		DeleteItemOffCharacterCorpse(uint32 db_id, uint32 equip_slot, uint32 item_id);
 	uint32		GetCharacterCorpseItemCount(uint32 corpse_id);
@@ -372,7 +386,21 @@ public:
 	bool	LoadAlternateAdvancement(Client *c);
 
 	/* Zone related   */
-	bool		GetZoneCFG(uint32 zoneid, uint16 instance_id, NewZone_Struct *data, bool &can_bind, bool &can_combat, bool &can_levitate, bool &can_castoutdoor, bool &is_city, bool &is_hotzone, bool &allow_mercs, uint8 &zone_type, int &ruleset, char **map_filename);
+	bool		GetZoneCFG(
+		uint32 zoneid, 
+		uint16 instance_id, 
+		NewZone_Struct *data, 
+		bool &can_bind, 
+		bool &can_combat, 
+		bool &can_levitate, 
+		bool &can_castoutdoor, 
+		bool &is_city, 
+		bool &is_hotzone, 
+		bool &allow_mercs, 
+		double &max_movement_update_range, 
+		uint8 &zone_type, 
+		int &ruleset, 
+		char **map_filename);
 	bool		SaveZoneCFG(uint32 zoneid, uint16 instance_id, NewZone_Struct* zd);
 	bool		LoadStaticZonePoints(LinkedList<ZonePoint*>* zone_point_list,const char* zonename, uint32 version);
 	bool		UpdateZoneSafeCoords(const char* zonename, const glm::vec3& location);
@@ -381,7 +409,7 @@ public:
 
 	/* Spawns and Spawn Points  */
 	bool		LoadSpawnGroups(const char* zone_name, uint16 version, SpawnGroupList* spawn_group_list);
-	bool		LoadSpawnGroupsByID(int spawngroupid, SpawnGroupList* spawn_group_list);
+	bool		LoadSpawnGroupsByID(int spawn_group_id, SpawnGroupList* spawn_group_list);
 	bool		PopulateZoneSpawnList(uint32 zoneid, LinkedList<Spawn2*> &spawn2_list, int16 version, uint32 repopdelay = 0);
 	bool		PopulateZoneSpawnListClose(uint32 zoneid, LinkedList<Spawn2*> &spawn2_list, int16 version, const glm::vec4& client_position, uint32 repop_distance);
 	Spawn2*		LoadSpawn2(LinkedList<Spawn2*> &spawn2_list, uint32 spawn2id, uint32 timeleft);
@@ -524,6 +552,11 @@ public:
 
 	/* Things which really dont belong here... */
 	int16	CommandRequirement(const char* commandname);
+
+#ifdef BOTS
+	// bot database add-on to eliminate the need for a second database connection
+	BotDatabase botdb;
+#endif
 
 protected:
 	void ZDBInitVars();

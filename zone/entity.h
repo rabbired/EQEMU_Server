@@ -29,6 +29,7 @@
 
 #include "position.h"
 #include "zonedump.h"
+#include "common.h"
 
 class Encounter;
 class Beacon;
@@ -116,6 +117,7 @@ public:
 
 #ifdef BOTS
 	Bot* CastToBot();
+	const Bot* CastToBot() const;
 #endif
 
 protected:
@@ -174,6 +176,7 @@ public:
 	}
 	Client *GetClientByCharID(uint32 iCharID);
 	Client *GetClientByWID(uint32 iWID);
+	Client *GetClientByLSID(uint32 iLSID);
 	Client *GetClient(uint32 ip, uint16 port);
 	Client *GetRandomClient(const glm::vec3& location, float Distance, Client *ExcludeClient = nullptr);
 	Group *GetGroupByMob(Mob* mob);
@@ -318,14 +321,42 @@ public:
 	void	MessageStatus(uint32 to_guilddbid, int to_minstatus, uint32 type, const char* message, ...);
 	void	MessageClose(Mob* sender, bool skipsender, float dist, uint32 type, const char* message, ...);
 	void	FilteredMessageClose(Mob* sender, bool skipsender, float dist, uint32 type, eqFilterType filter, const char* message, ...);
-	void	Message_StringID(Mob *sender, bool skipsender, uint32 type, uint32 string_id, const char* message1=0,const char* message2=0,const char* message3=0,const char* message4=0,const char* message5=0,const char* message6=0,const char* message7=0,const char* message8=0,const char* message9=0);
-	void	FilteredMessage_StringID(Mob *sender, bool skipsender, uint32 type, eqFilterType filter, uint32 string_id, const char* message1=0,const char* message2=0,const char* message3=0,const char* message4=0,const char* message5=0,const char* message6=0,const char* message7=0,const char* message8=0,const char* message9=0);
-	void	MessageClose_StringID(Mob *sender, bool skipsender, float dist, uint32 type, uint32 string_id, const char* message1=0,const char* message2=0,const char* message3=0,const char* message4=0,const char* message5=0,const char* message6=0,const char* message7=0,const char* message8=0,const char* message9=0);
-	void	FilteredMessageClose_StringID(Mob *sender, bool skipsender, float dist, uint32 type, eqFilterType filter, uint32 string_id, const char* message1=0,const char* message2=0,const char* message3=0,const char* message4=0,const char* message5=0,const char* message6=0,const char* message7=0,const char* message8=0,const char* message9=0);
-	void	ChannelMessageFromWorld(const char* from, const char* to, uint8 chan_num, uint32 guilddbid, uint8 language, const char* message);
+	void	MessageString(Mob *sender, bool skipsender, uint32 type, uint32 string_id, const char* message1=0,const char* message2=0,const char* message3=0,const char* message4=0,const char* message5=0,const char* message6=0,const char* message7=0,const char* message8=0,const char* message9=0);
+	void	FilteredMessageString(Mob *sender, bool skipsender, uint32 type, eqFilterType filter, uint32 string_id, const char* message1=0,const char* message2=0,const char* message3=0,const char* message4=0,const char* message5=0,const char* message6=0,const char* message7=0,const char* message8=0,const char* message9=0);
+	void	MessageCloseString(
+		Mob *sender,
+		bool skipsender,
+		float dist,
+		uint32 type,
+		uint32 string_id,
+		const char *message1 = 0,
+		const char *message2 = 0,
+		const char *message3 = 0,
+		const char *message4 = 0,
+		const char *message5 = 0,
+		const char *message6 = 0,
+		const char *message7 = 0,
+		const char *message8 = 0,
+		const char *message9 = 0);
+	void	FilteredMessageCloseString(
+		Mob *sender,
+		bool skipsender,
+		float dist,
+		uint32 type,
+		eqFilterType filter,
+		uint32 string_id,
+		const char *message1 = 0,
+		const char *message2 = 0,
+		const char *message3 = 0,
+		const char *message4 = 0,
+		const char *message5 = 0,
+		const char *message6 = 0,
+		const char *message7 = 0,
+		const char *message8 = 0,
+		const char *message9 = 0);
+	void	ChannelMessageFromWorld(const char* from, const char* to, uint8 chan_num, uint32 guilddbid, uint8 language, uint8 lang_skill, const char* message);
 	void	ChannelMessage(Mob* from, uint8 chan_num, uint8 language, const char* message, ...);
 	void	ChannelMessage(Mob* from, uint8 chan_num, uint8 language, uint8 lang_skill, const char* message, ...);
-	void	ChannelMessageSend(Mob* to, uint8 chan_num, uint8 language, const char* message, ...);
 	void	SendZoneSpawns(Client*);
 	void	SendZonePVPUpdates(Client *);
 	void	SendZoneSpawnsBulk(Client* client);
@@ -337,7 +368,7 @@ public:
 	void	SendNimbusEffects(Client *c);
 	void	SendUntargetable(Client *c);
 	void	DuelMessage(Mob* winner, Mob* loser, bool flee);
-	void	QuestJournalledSayClose(Mob *sender, Client *QuestIntiator, float dist, const char* mobname, const char* message);
+	void	QuestJournalledSayClose(Mob *sender, float dist, const char* mobname, const char* message, Journal::Options &opts);
 	void	GroupMessage(uint32 gid, const char *from, const char *message);
 	void	ExpeditionWarning(uint32 minutes_left);
 
@@ -353,7 +384,7 @@ public:
 	void	QueueClientsByTarget(Mob* sender, const EQApplicationPacket* app, bool iSendToSender = true, Mob* SkipThisMob = 0, bool ackreq = true,
 						bool HoTT = true, uint32 ClientVersionBits = 0xFFFFFFFF, bool inspect_buffs = false);
 
-	void	QueueClientsByXTarget(Mob* sender, const EQApplicationPacket* app, bool iSendToSender = true, EQEmu::versions::ClientVersionBit client_version_bits = EQEmu::versions::ClientVersionBit::bit_AllClients);
+	void	QueueClientsByXTarget(Mob* sender, const EQApplicationPacket* app, bool iSendToSender = true, EQEmu::versions::ClientVersionBitmask client_version_bits = EQEmu::versions::ClientVersionBitmask::maskAllClients);
 	void	QueueToGroupsForNPCHealthAA(Mob* sender, const EQApplicationPacket* app);
 	void	QueueManaged(Mob* sender, const EQApplicationPacket* app, bool ignore_sender=false, bool ackreq = true);
 
@@ -370,9 +401,8 @@ public:
 
 	void	AddHealAggro(Mob* target, Mob* caster, uint16 hate);
 	Mob*	FindDefenseNPC(uint32 npcid);
-	void	OpenDoorsNear(NPC* opener);
+	void	OpenDoorsNear(Mob* opener);
 	void	UpdateWho(bool iSendFullUpdate = false);
-	void	SendPositionUpdates(Client* client, uint32 cLastUpdate = 0, float update_range = 0, Entity* always_send = 0, bool iSendEvenIfNotChanged = false);
 	char*	MakeNameUnique(char* name);
 	static char* RemoveNumbers(char* name);
 	void	SignalMobsByNPCID(uint32 npc_type, int signal_id);
@@ -382,7 +412,6 @@ public:
 	void	SendPetitionToAdmins();
 	void	AddLootToNPCS(uint32 item_id, uint32 count);
 
-	void	ListNPCs(Client* client, const char* arg1 = 0, const char* arg2 = 0, uint8 searchtype = 0);
 	void	ListNPCCorpses(Client* client);
 	void	ListPlayerCorpses(Client* client);
 	int32	DeleteNPCCorpses();
@@ -416,7 +445,7 @@ public:
 
 	void	CheckClientAggro(Client *around);
 	Mob*	AICheckNPCtoNPCAggro(Mob* sender, float iAggroRange, float iAssistRange);
-	int	GetHatedCount(Mob *attacker, Mob *exclude);
+	int		GetHatedCount(Mob *attacker, Mob *exclude, bool inc_gray_con);
 	void	AIYellForHelp(Mob* sender, Mob* attacker);
 	bool	AICheckCloseBeneficialSpells(NPC* caster, uint8 iChance, float iRange, uint32 iSpellTypes);
 	bool	Merc_AICheckCloseBeneficialSpells(Merc* caster, uint8 iChance, float iRange, uint32 iSpellTypes);
