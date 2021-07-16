@@ -1,4 +1,4 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
 
 SET(zone_sources
 	aa.cpp
@@ -22,6 +22,7 @@ SET(zone_sources
 	corpse.cpp
 	data_bucket.cpp
 	doors.cpp
+	dynamic_zone.cpp
 	effects.cpp
 	embparser.cpp
 	embparser_api.cpp
@@ -30,6 +31,9 @@ SET(zone_sources
 	encounter.cpp
 	entity.cpp
 	exp.cpp
+	expedition.cpp
+	expedition_database.cpp
+	expedition_request.cpp
 	fastmath.cpp
 	fearpath.cpp
 	forage.cpp
@@ -41,6 +45,7 @@ SET(zone_sources
 	horse.cpp
 	inventory.cpp
 	loottables.cpp
+	lua_bot.cpp
 	lua_bit.cpp
 	lua_corpse.cpp
 	lua_client.cpp
@@ -48,6 +53,7 @@ SET(zone_sources
 	lua_encounter.cpp
 	lua_entity.cpp
 	lua_entity_list.cpp
+	lua_expedition.cpp
 	lua_general.cpp
 	lua_group.cpp
 	lua_hate_list.cpp
@@ -79,6 +85,7 @@ SET(zone_sources
 	horse.cpp
 	inventory.cpp
 	loottables.cpp
+	main.cpp
 	map.cpp
 	merc.cpp
 	mob.cpp
@@ -87,7 +94,6 @@ SET(zone_sources
 	mob_movement_manager.cpp
 	mob_info.cpp
 	mod_functions.cpp
-	net.cpp
 	npc.cpp
 	npc_ai.cpp
 	npc_scale_manager.cpp
@@ -97,11 +103,14 @@ SET(zone_sources
 	pathfinder_nav_mesh.cpp
 	pathfinder_null.cpp
 	pathing.cpp
+	perl_bot.cpp
 	perl_client.cpp
 	perl_doors.cpp
 	perl_entity.cpp
+	perl_expedition.cpp
 	perl_groups.cpp
 	perl_hateentry.cpp
+	perl_inventory.cpp
 	perl_mob.cpp
 	perl_npc.cpp
 	perl_object.cpp
@@ -125,6 +134,10 @@ SET(zone_sources
 	special_attacks.cpp
 	spell_effects.cpp
 	spells.cpp
+	task_client_state.cpp
+	task_goal_list_manager.cpp
+	task_manager.cpp
+	task_proximity_manager.cpp
 	tasks.cpp
 	titles.cpp
 	tradeskills.cpp
@@ -141,8 +154,10 @@ SET(zone_sources
 	zone.cpp
 	zone_config.cpp
 	zonedb.cpp
-	zoning.cpp
-)
+	zone_event_scheduler.cpp
+	zone_reload.cpp
+	zone_store.cpp
+	zoning.cpp)
 
 SET(zone_headers
 	aa.h
@@ -163,6 +178,7 @@ SET(zone_headers
 	corpse.h
 	data_bucket.h
 	doors.h
+	dynamic_zone.h
 	embparser.h
 	embperl.h
 	embxs.h
@@ -170,6 +186,9 @@ SET(zone_headers
 	entity.h
 	errmsg.h
 	event_codes.h
+	expedition.h
+	expedition_database.h
+	expedition_request.h
 	fastmath.h
 	forage.h
 	global_loot_manager.h
@@ -178,6 +197,7 @@ SET(zone_headers
 	hate_list.h
 	heal_rotation.h
 	horse.h
+	lua_bot.h
 	lua_bit.h
 	lua_client.h
 	lua_corpse.h
@@ -185,6 +205,7 @@ SET(zone_headers
 	lua_encounter.h
 	lua_entity.h
 	lua_entity_list.h
+	lua_expedition.h
 	lua_general.h
 	lua_group.h
 	lua_hate_list.h
@@ -210,7 +231,6 @@ SET(zone_headers
 	merc.h
 	mob.h
 	mob_movement_manager.h
-	net.h
 	npc.h
 	npc_ai.h
 	npc_scale_manager.h
@@ -229,7 +249,6 @@ SET(zone_headers
 	quest_interface.h
 	questmgr.h
 	quest_parser_collection.h
-	raid.h
 	raids.h
 	raycast_mesh.h
 	skills.h
@@ -237,6 +256,10 @@ SET(zone_headers
 	spawn2.h
 	spawngroup.h
 	string_ids.h
+	task_client_state.h
+	task_goal_list_manager.h
+	task_manager.h
+	task_proximity_manager.h
 	tasks.h
 	titles.h
 	trap.h
@@ -246,9 +269,12 @@ SET(zone_headers
 	worldserver.h
 	xtargetautohaters.h
 	zone.h
+	zone_event_scheduler.h
 	zone_config.h
 	zonedb.h
-	zonedump.h)
+	zonedump.h
+	zone_reload.h
+	zone_store.h)
 
 ADD_EXECUTABLE(zone ${zone_sources} ${zone_headers})
 
@@ -256,14 +282,6 @@ INSTALL(TARGETS zone RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 
 ADD_DEFINITIONS(-DZONE)
 
-TARGET_LINK_LIBRARIES(zone ${SERVER_LIBS})
-
-IF(EQEMU_BUILD_PERL)
-	TARGET_LINK_LIBRARIES(zone ${PERL_LIBRARY})
-ENDIF()
-
-IF(EQEMU_BUILD_LUA)
-	TARGET_LINK_LIBRARIES(zone luabind ${LUA_LIBRARY})
-ENDIF(EQEMU_BUILD_LUA)
+TARGET_LINK_LIBRARIES(zone ${ZONE_LIBS})
 
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)

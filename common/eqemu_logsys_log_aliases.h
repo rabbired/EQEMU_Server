@@ -21,6 +21,8 @@
 #ifndef EQEMU_EQEMU_LOGSYS_LOG_ALIASES_H
 #define EQEMU_EQEMU_LOGSYS_LOG_ALIASES_H
 
+#ifdef BUILD_LOGGING
+
 /**
  * RFC 5424
  */
@@ -157,6 +159,16 @@
 #define LogDoorsDetail(message, ...) do {\
     if (LogSys.log_settings[Logs::Doors].is_category_enabled == 1)\
         OutF(LogSys, Logs::Detail, Logs::Doors, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogGroup(message, ...) do {\
+    if (LogSys.log_settings[Logs::Group].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::Group, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogGroupDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::Group].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::Group, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
 } while (0)
 
 #define LogGuilds(message, ...) do {\
@@ -489,9 +501,150 @@
         OutF(LogSys, Logs::Detail, Logs::Status, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
 } while (0)
 
-/**
-* Misc
-*/
+#define LogAIScanClose(message, ...) do {\
+    if (LogSys.log_settings[Logs::AIScanClose].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::AIScanClose, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogAIScanCloseDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::AIScanClose].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::AIScanClose, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogAIYellForHelp(message, ...) do {\
+    if (LogSys.log_settings[Logs::AIYellForHelp].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::AIYellForHelp, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogAIYellForHelpDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::AIYellForHelp].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::AIYellForHelp, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogAICastBeneficialClose(message, ...) do {\
+    if (LogSys.log_settings[Logs::AICastBeneficialClose].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::AICastBeneficialClose, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogAICastBeneficialCloseDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::AICastBeneficialClose].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::AICastBeneficialClose, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogAoeCast(message, ...) do {\
+    if (LogSys.log_settings[Logs::AoeCast].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::AoeCast, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogAoeCastDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::AoeCast].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::AoeCast, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogEntityManagement(message, ...) do {\
+    if (LogSys.log_settings[Logs::EntityManagement].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::EntityManagement, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogEntityManagementDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::EntityManagement].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::EntityManagement, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogFlee(message, ...) do {\
+    if (LogSys.log_settings[Logs::Flee].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::Flee, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogFleeDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::Flee].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::Flee, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogAura(message, ...) do {\
+    if (LogSys.log_settings[Logs::Aura].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::Aura, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogAuraDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::Aura].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::Aura, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogHotReload(message, ...) do {\
+    if (LogSys.log_settings[Logs::HotReload].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::HotReload, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogHotReloadDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::HotReload].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::HotReload, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogMerchants(message, ...) do {\
+    if (LogSys.log_settings[Logs::Merchants].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::Merchants, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogMerchantsDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::Merchants].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::Merchants, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogZonePoints(message, ...) do {\
+    if (LogSys.log_settings[Logs::ZonePoints].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::ZonePoints, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogZonePointsDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::ZonePoints].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::ZonePoints, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogLoot(message, ...) do {\
+    if (LogSys.log_settings[Logs::Loot].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::Loot, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogLootDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::Loot].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::Loot, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogExpeditions(message, ...) do {\
+    if (LogSys.log_settings[Logs::Expeditions].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::Expeditions, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogExpeditionsModerate(message, ...) do {\
+    if (LogSys.log_settings[Logs::Expeditions].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Moderate, Logs::Expeditions, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogExpeditionsDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::Expeditions].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::Expeditions, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogDynamicZones(message, ...) do {\
+    if (LogSys.log_settings[Logs::DynamicZones].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::DynamicZones, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogDynamicZonesDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::DynamicZones].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::DynamicZones, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogScheduler(message, ...) do {\
+    if (LogSys.log_settings[Logs::Scheduler].is_category_enabled == 1)\
+        OutF(LogSys, Logs::General, Logs::Scheduler, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
+
+#define LogSchedulerDetail(message, ...) do {\
+    if (LogSys.log_settings[Logs::Scheduler].is_category_enabled == 1)\
+        OutF(LogSys, Logs::Detail, Logs::Scheduler, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
+} while (0)
 
 #define Log(debug_level, log_category, message, ...) do {\
     if (LogSys.log_settings[log_category].is_category_enabled == 1)\
@@ -503,5 +656,373 @@
         OutF(LogSys, debug_level, log_category, __FILE__, __func__, __LINE__, message, ##__VA_ARGS__);\
 } while (0)
 
+#else
+#define LogEmergency(message, ...) do {\
+} while (0)
+
+#define LogAlert(message, ...) do {\
+} while (0)
+
+#define LogCritical(message, ...) do {\
+} while (0)
+
+#define LogError(message, ...) do {\
+} while (0)
+
+#define LogWarning(message, ...) do {\
+} while (0)
+
+#define LogNotice(message, ...) do {\
+} while (0)
+
+#define LogInfo(message, ...) do {\
+} while (0)
+
+#define LogDebug(message, ...) do {\
+} while (0)
+
+/**
+ * Category
+ */
+
+#define LogAA(message, ...) do {\
+} while (0)
+
+#define LogAADetail(message, ...) do {\
+} while (0)
+
+#define LogAI(message, ...) do {\
+} while (0)
+
+#define LogAIDetail(message, ...) do {\
+} while (0)
+
+#define LogAggro(message, ...) do {\
+} while (0)
+
+#define LogAggroDetail(message, ...) do {\
+} while (0)
+
+#define LogAttack(message, ...) do {\
+} while (0)
+
+#define LogAttackDetail(message, ...) do {\
+} while (0)
+
+#define LogPacketClientServer(message, ...) do {\
+} while (0)
+
+#define LogPacketClientServerDetail(message, ...) do {\
+} while (0)
+
+#define LogCombat(message, ...) do {\
+} while (0)
+
+#define LogCombatDetail(message, ...) do {\
+} while (0)
+
+#define LogCommands(message, ...) do {\
+} while (0)
+
+#define LogCommandsDetail(message, ...) do {\
+} while (0)
+
+#define LogCrash(message, ...) do {\
+} while (0)
+
+#define LogCrashDetail(message, ...) do {\
+} while (0)
+
+#define LogDoors(message, ...) do {\
+} while (0)
+
+#define LogDoorsDetail(message, ...) do {\
+} while (0)
+
+#define LogGroup(message, ...) do {\
+} while (0)
+
+#define LogGroupDetail(message, ...) do {\
+} while (0)
+
+#define LogGuilds(message, ...) do {\
+} while (0)
+
+#define LogGuildsDetail(message, ...) do {\
+} while (0)
+
+#define LogInventory(message, ...) do {\
+} while (0)
+
+#define LogInventoryDetail(message, ...) do {\
+} while (0)
+
+#define LogLauncher(message, ...) do {\
+} while (0)
+
+#define LogLauncherDetail(message, ...) do {\
+} while (0)
+
+#define LogNetcode(message, ...) do {\
+} while (0)
+
+#define LogNetcodeDetail(message, ...) do {\
+} while (0)
+
+#define LogNormal(message, ...) do {\
+} while (0)
+
+#define LogNormalDetail(message, ...) do {\
+} while (0)
+
+#define LogObject(message, ...) do {\
+} while (0)
+
+#define LogObjectDetail(message, ...) do {\
+} while (0)
+
+#define LogPathing(message, ...) do {\
+} while (0)
+
+#define LogPathingDetail(message, ...) do {\
+} while (0)
+
+#define LogQSServer(message, ...) do {\
+} while (0)
+
+#define LogQSServerDetail(message, ...) do {\
+} while (0)
+
+#define LogQuests(message, ...) do {\
+} while (0)
+
+#define LogQuestsDetail(message, ...) do {\
+} while (0)
+
+#define LogRules(message, ...) do {\
+} while (0)
+
+#define LogRulesDetail(message, ...) do {\
+} while (0)
+
+#define LogSkills(message, ...) do {\
+} while (0)
+
+#define LogSkillsDetail(message, ...) do {\
+} while (0)
+
+#define LogSpawns(message, ...) do {\
+} while (0)
+
+#define LogSpawnsDetail(message, ...) do {\
+} while (0)
+
+#define LogSpells(message, ...) do {\
+} while (0)
+
+#define LogSpellsDetail(message, ...) do {\
+} while (0)
+
+#define LogTCPConnection(message, ...) do {\
+} while (0)
+
+#define LogTCPConnectionDetail(message, ...) do {\
+} while (0)
+
+#define LogTasks(message, ...) do {\
+} while (0)
+
+#define LogTasksDetail(message, ...) do {\
+} while (0)
+
+#define LogTradeskills(message, ...) do {\
+} while (0)
+
+#define LogTradeskillsDetail(message, ...) do {\
+} while (0)
+
+#define LogTrading(message, ...) do {\
+} while (0)
+
+#define LogTradingDetail(message, ...) do {\
+} while (0)
+
+#define LogTribute(message, ...) do {\
+} while (0)
+
+#define LogTributeDetail(message, ...) do {\
+} while (0)
+
+#define LogMySQLError(message, ...) do {\
+} while (0)
+
+#define LogMySQLErrorDetail(message, ...) do {\
+} while (0)
+
+#define LogMySQLQuery(message, ...) do {\
+} while (0)
+
+#define LogMySQLQueryDetail(message, ...) do {\
+} while (0)
+
+#define LogMercenaries(message, ...) do {\
+} while (0)
+
+#define LogMercenariesDetail(message, ...) do {\
+} while (0)
+
+#define LogQuestDebug(message, ...) do {\
+} while (0)
+
+#define LogQuestDebugDetail(message, ...) do {\
+} while (0)
+
+#define LogLoginserver(message, ...) do {\
+} while (0)
+
+#define LogLoginserverDetail(message, ...) do {\
+} while (0)
+
+#define LogClientLogin(message, ...) do {\
+} while (0)
+
+#define LogClientLoginDetail(message, ...) do {\
+} while (0)
+
+#define LogHeadlessClient(message, ...) do {\
+} while (0)
+
+#define LogHeadlessClientDetail(message, ...) do {\
+} while (0)
+
+#define LogHPUpdate(message, ...) do {\
+} while (0)
+
+#define LogHPUpdateDetail(message, ...) do {\
+} while (0)
+
+#define LogFixZ(message, ...) do {\
+} while (0)
+
+#define LogFixZDetail(message, ...) do {\
+} while (0)
+
+#define LogFood(message, ...) do {\
+} while (0)
+
+#define LogFoodDetail(message, ...) do {\
+} while (0)
+
+#define LogTraps(message, ...) do {\
+} while (0)
+
+#define LogTrapsDetail(message, ...) do {\
+} while (0)
+
+#define LogNPCRoamBox(message, ...) do {\
+} while (0)
+
+#define LogNPCRoamBoxDetail(message, ...) do {\
+} while (0)
+
+#define LogNPCScaling(message, ...) do {\
+} while (0)
+
+#define LogNPCScalingDetail(message, ...) do {\
+} while (0)
+
+#define LogMobAppearance(message, ...) do {\
+} while (0)
+
+#define LogMobAppearanceDetail(message, ...) do {\
+} while (0)
+
+#define LogStatus(message, ...) do {\
+} while (0)
+
+#define LogStatusDetail(message, ...) do {\
+} while (0)
+
+#define LogAIScanClose(message, ...) do {\
+} while (0)
+
+#define LogAIScanCloseDetail(message, ...) do {\
+} while (0)
+
+#define LogAIYellForHelp(message, ...) do {\
+} while (0)
+
+#define LogAIYellForHelpDetail(message, ...) do {\
+} while (0)
+
+#define LogAICastBeneficialClose(message, ...) do {\
+} while (0)
+
+#define LogAICastBeneficialCloseDetail(message, ...) do {\
+} while (0)
+
+#define LogAoeCast(message, ...) do {\
+} while (0)
+
+#define LogAoeCastDetail(message, ...) do {\
+} while (0)
+
+#define LogEntityManagement(message, ...) do {\
+} while (0)
+
+#define LogEntityManagementDetail(message, ...) do {\
+} while (0)
+
+#define LogFlee(message, ...) do {\
+} while (0)
+
+#define LogFleeDetail(message, ...) do {\
+} while (0)
+
+#define LogAura(message, ...) do {\
+} while (0)
+
+#define LogAuraDetail(message, ...) do {\
+} while (0)
+
+#define LogHotReload(message, ...) do {\
+} while (0)
+
+#define LogHotReloadDetail(message, ...) do {\
+} while (0)
+
+#define LogMerchants(message, ...) do {\
+} while (0)
+
+#define LogMerchantsDetail(message, ...) do {\
+} while (0)
+
+#define LogZonePoints(message, ...) do {\
+} while (0)
+
+#define LogZonePointsDetail(message, ...) do {\
+} while (0)
+
+#define LogExpeditions(message, ...) do {\
+} while (0)
+
+#define LogExpeditionsModerate(message, ...) do {\
+} while (0)
+
+#define LogExpeditionsDetail(message, ...) do {\
+} while (0)
+
+#define LogDynamicZones(message, ...) do {\
+} while (0)
+
+#define LogDynamicZonesDetail(message, ...) do {\
+} while (0)
+
+#define Log(debug_level, log_category, message, ...) do {\
+} while (0)
+
+#define LogF(debug_level, log_category, message, ...) do {\
+} while (0)
+#endif
 
 #endif //EQEMU_EQEMU_LOGSYS_LOG_ALIASES_H

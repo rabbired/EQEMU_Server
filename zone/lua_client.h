@@ -5,6 +5,7 @@
 #include "lua_mob.h"
 
 class Client;
+class Lua_Expedition;
 class Lua_Group;
 class Lua_Raid;
 class Lua_Inventory;
@@ -39,8 +40,15 @@ public:
 	void Disconnect();
 	bool IsLD();
 	void WorldKick();
-	bool GetAnon();
+	void SendToGuildHall();
+	void SendToInstance(std::string instance_type, std::string zone_short_name, uint32 instance_version, float x, float y, float z, float heading, std::string instance_identifier, uint32 duration);
+	int GetAnon();
+	void SetAnon(uint8 anon_flag);
+	int GetAFK();
+	void SetAFK(uint8 afk_flag);
 	void Duck();
+	void DyeArmorBySlot(uint8 slot, uint8 red, uint8 green, uint8 blue);
+	void DyeArmorBySlot(uint8 slot, uint8 red, uint8 green, uint8 blue, uint8 use_tint);
 	void Stand();
 	void SetGM(bool v);
 	void SetPVP(bool v);
@@ -48,10 +56,11 @@ public:
 	bool GetGM();
 	void SetBaseClass(int v);
 	void SetBaseRace(int v);
-	void SetBaseGender(int v);
+	void SetBaseGender(int v);	
+	int GetClassBitmask();
+	int GetRaceBitmask();
 	int GetBaseFace();
 	int GetLanguageSkill(int skill_id);
-	const char *GetLastName();
 	int GetLDoNPointsTheme(int theme);
 	int GetBaseSTR();
 	int GetBaseSTA();
@@ -62,10 +71,16 @@ public:
 	int GetBaseWIS();
 	int GetWeight();
 	uint32 GetEXP();
+	double GetEXPModifier(uint32 zone_id);
+	double GetAAEXPModifier(uint32 zone_id);
+	void SetAAEXPModifier(uint32 zone_id, double aa_modifier);
+	void SetEXPModifier(uint32 zone_id, double exp_modifier);
 	uint32 GetAAExp();
 	uint32 GetAAPercent();
 	uint32 GetTotalSecondsPlayed();
-	void UpdateLDoNPoints(int points, uint32 theme);
+	void AddLDoNLoss(uint32 theme_id);
+	void AddLDoNWin(uint32 theme_id);
+	void UpdateLDoNPoints(uint32 theme_id, int points);
 	void SetDeity(int v);
 	void AddEXP(uint32 add_exp);
 	void AddEXP(uint32 add_exp, int conlevel);
@@ -78,6 +93,7 @@ public:
 	void SetBindPoint(int to_zone, int to_instance, float new_x);
 	void SetBindPoint(int to_zone, int to_instance, float new_x, float new_y);
 	void SetBindPoint(int to_zone, int to_instance, float new_x, float new_y, float new_z);
+	void SetBindPoint(int to_zone, int to_instance, float new_x, float new_y, float new_z, float new_heading);
 	float GetBindX();
 	float GetBindX(int index);
 	float GetBindY();
@@ -88,8 +104,17 @@ public:
 	float GetBindHeading(int index);
 	uint32 GetBindZoneID();
 	uint32 GetBindZoneID(int index);
+	float GetTargetRingX();
+	float GetTargetRingY();
+	float GetTargetRingZ();
 	void MovePC(int zone, float x, float y, float z, float heading);
 	void MovePCInstance(int zone, int instance, float x, float y, float z, float heading);
+	void MoveZone(const char *zone_short_name);
+	void MoveZoneGroup(const char *zone_short_name);
+	void MoveZoneRaid(const char *zone_short_name);
+	void MoveZoneInstance(uint16 instance_id);
+	void MoveZoneInstanceGroup(uint16 instance_id);
+	void MoveZoneInstanceRaid(uint16 instance_id);
 	void ChangeLastName(const char *in);
 	int GetFactionLevel(uint32 char_id, uint32 npc_id, uint32 race, uint32 class_, uint32 deity, uint32 faction, Lua_NPC npc);
 	void SetFactionLevel(uint32 char_id, uint32 npc_id, int char_class, int char_race, int char_deity);
@@ -137,6 +162,15 @@ public:
 	void UnmemSpellAll(bool update_client);
 	uint16 FindMemmedSpellBySlot(int slot);
 	int MemmedCount();
+	luabind::object GetLearnableDisciplines(lua_State* L);
+	luabind::object GetLearnableDisciplines(lua_State* L, uint8 min_level);
+	luabind::object GetLearnableDisciplines(lua_State* L, uint8 min_level, uint8 max_level);
+	luabind::object GetLearnedDisciplines(lua_State* L);
+	luabind::object GetMemmedSpells(lua_State* L);
+	luabind::object GetScribedSpells(lua_State* L);
+	luabind::object GetScribeableSpells(lua_State* L);
+	luabind::object GetScribeableSpells(lua_State* L, uint8 min_level);
+	luabind::object GetScribeableSpells(lua_State* L, uint8 min_level, uint8 max_level);
 	void ScribeSpell(int spell_id, int slot);
 	void ScribeSpell(int spell_id, int slot, bool update_client);
 	void UnscribeSpell(int slot);
@@ -195,7 +229,11 @@ public:
 	void ForageItem(bool guarantee);
 	float CalcPriceMod(Lua_Mob other, bool reverse);
 	void ResetTrade();
+	uint32 GetDisciplineTimer(uint32 timer_id);
+	void ResetDisciplineTimer(uint32 timer_id);
+	void ResetAllDisciplineTimers();
 	bool UseDiscipline(int spell_id, int target_id);
+	bool HasDisciplineLearned(uint16 spell_id);
 	int GetCharacterFactionLevel(int faction_id);
 	void SetZoneFlag(int zone_id);
 	void ClearZoneFlag(int zone_id);
@@ -220,10 +258,13 @@ public:
 	void SetStartZone(int zone_id, float x);
 	void SetStartZone(int zone_id, float x, float y);
 	void SetStartZone(int zone_id, float x, float y, float z);
+	void SetStartZone(int zone_id, float x, float y, float z, float heading);
 	void KeyRingAdd(uint32 item);
 	bool KeyRingCheck(uint32 item);
 	void AddPVPPoints(uint32 points);
 	void AddCrystals(uint32 radiant, uint32 ebon);
+	void SetEbonCrystals(uint32 value);
+	void SetRadiantCrystals(uint32 value);
 	uint32 GetPVPPoints();
 	uint32 GetRadiantCrystals();
 	uint32 GetEbonCrystals();
@@ -240,6 +281,7 @@ public:
 	uint32 GetIP();
 	void AddLevelBasedExp(int exp_pct);
 	void AddLevelBasedExp(int exp_pct, int max_level);
+	void AddLevelBasedExp(int exp_pct, int max_level, bool ignore_mods);
 	void IncrementAA(int aa);
 	bool GrantAlternateAdvancementAbility(int aa_id, int points);
 	bool GrantAlternateAdvancementAbility(int aa_id, int points, bool ignore_cost);
@@ -248,6 +290,7 @@ public:
 	void ClearCompassMark();
 	int GetNextAvailableSpellBookSlot();
 	int GetNextAvailableSpellBookSlot(int start);
+	uint32 GetSpellIDByBookSlot(int book_slot);
 	int FindSpellBookSlotBySpellID(int spell_id);
 	void UpdateTaskActivity(int task, int activity, int count);
 	void AssignTask(int task, int npc_id);
@@ -267,6 +310,7 @@ public:
 	uint64 GetAllMoney();
 	uint32 GetMoney(uint8 type, uint8 subtype);
 	void OpenLFGuildWindow();
+	void NotifyNewTitlesAvailable();
 	void Signal(uint32 id);
 	void AddAlternateCurrencyValue(uint32 currency, int amount);
 	void SetAlternateCurrencyValue(uint32 currency, int amount);
@@ -315,10 +359,48 @@ public:
 	void DisableAreaEndRegen();
 	void EnableAreaRegens(int value);
 	void DisableAreaRegens();
-
+	void SetHideMe(bool hide_me_state);
+	void Popup(const char* title, const char* text);
+	void Popup(const char* title, const char* text, uint32 popup_id);
+	void Popup(const char* title, const char* text, uint32 popup_id, uint32 negative_id);
+	void Popup(const char* title, const char* text, uint32 popup_id, uint32 negative_id, uint32 button_type);
+	void Popup(const char* title, const char* text, uint32 popup_id, uint32 negative_id, uint32 button_type, uint32 duration);
+	void Popup(const char* title, const char* text, uint32 popup_id, uint32 negative_id, uint32 button_type, uint32 duration, const char* button_name_one, const char* button_name_two);
+	void Popup(const char* title, const char* text, uint32 popup_id, uint32 negative_id, uint32 button_type, uint32 duration, const char* button_name_one, const char* button_name_two, uint32 sound_controls);
+	int CountItem(uint32 item_id);
+	void RemoveItem(uint32 item_id);
+	void RemoveItem(uint32 item_id, uint32 quantity);
 
 	void SetPrimaryWeaponOrnamentation(uint32 model_id);
 	void SetSecondaryWeaponOrnamentation(uint32 model_id);
+
+	void SetClientMaxLevel(int value);
+	int GetClientMaxLevel();
+
+	Lua_Expedition  CreateExpedition(luabind::object expedition_info);
+	Lua_Expedition  CreateExpedition(std::string zone_name, uint32 version, uint32 duration, std::string expedition_name, uint32 min_players, uint32 max_players);
+	Lua_Expedition  CreateExpedition(std::string zone_name, uint32 version, uint32 duration, std::string expedition_name, uint32 min_players, uint32 max_players, bool disable_messages);
+	Lua_Expedition  GetExpedition();
+	luabind::object GetExpeditionLockouts(lua_State* L);
+	luabind::object GetExpeditionLockouts(lua_State* L, std::string expedition_name);
+	std::string     GetLockoutExpeditionUUID(std::string expedition_name, std::string event_name);
+	void            AddExpeditionLockout(std::string expedition_name, std::string event_name, uint32 seconds);
+	void            AddExpeditionLockout(std::string expedition_name, std::string event_name, uint32 seconds, std::string uuid);
+	void            AddExpeditionLockoutDuration(std::string expedition_name, std::string event_name, int seconds);
+	void            AddExpeditionLockoutDuration(std::string expedition_name, std::string event_name, int seconds, std::string uuid);
+	void            RemoveAllExpeditionLockouts();
+	void            RemoveAllExpeditionLockouts(std::string expedition_name);
+	void            RemoveExpeditionLockout(std::string expedition_name, std::string event_name);
+	bool            HasExpeditionLockout(std::string expedition_name, std::string event_name);
+	void            MovePCDynamicZone(uint32 zone_id);
+	void            MovePCDynamicZone(uint32 zone_id, int zone_version);
+	void            MovePCDynamicZone(uint32 zone_id, int zone_version, bool msg_if_invalid);
+	void            MovePCDynamicZone(std::string zone_name);
+	void            MovePCDynamicZone(std::string zone_name, int zone_version);
+	void            MovePCDynamicZone(std::string zone_name, int zone_version, bool msg_if_invalid);
+	void            Fling(float value, float target_x, float target_y, float target_z);
+	void            Fling(float value, float target_x, float target_y, float target_z, bool ignore_los);
+	void            Fling(float value, float target_x, float target_y, float target_z, bool ignore_los, bool clipping);
 };
 
 #endif

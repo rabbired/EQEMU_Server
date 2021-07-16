@@ -36,7 +36,7 @@ Horse::Horse(Client *_owner, uint16 spell_id, const glm::vec4& position)
 	strn0cpy(name, _owner->GetCleanName(), 55);
 	strcat(name,"`s_Mount00");
 
-	IsHorse = true;
+	is_horse = true;
 
 	owner = _owner;
 }
@@ -73,7 +73,7 @@ const NPCType *Horse::BuildHorseType(uint16 spell_id) {
 	const char* fileName = spells[spell_id].teleport_zone;
 
 	std::string query = StringFormat("SELECT race, gender, texture, mountspeed FROM horses WHERE filename = '%s'", fileName);
-	auto results = database.QueryDatabase(query);
+	auto results = content_db.QueryDatabase(query);
 	if (!results.Success()) {
 		return nullptr;
 	}

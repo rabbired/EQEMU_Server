@@ -27,6 +27,7 @@
 
 #include "pets.h"
 #include "zonedb.h"
+#include "zone_store.h"
 
 #include <string>
 
@@ -199,7 +200,7 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 		}
 #ifdef BOTS
 		else if (this->IsBot())
-			act_power = CastToBot()->GetBotFocusEffect(Bot::BotfocusPetPower, spell_id);
+			act_power = CastToBot()->GetBotFocusEffect(focusPetPower, spell_id);
 #endif
 	}
 	else if (petpower > 0)
@@ -211,14 +212,14 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 
 	//lookup our pets table record for this type
 	PetRecord record;
-	if(!database.GetPoweredPetEntry(pettype, act_power, &record)) {
+	if(!content_db.GetPoweredPetEntry(pettype, act_power, &record)) {
 		Message(Chat::Red, "Unable to find data for pet %s", pettype);
 		LogError("Unable to find data for pet [{}], check pets table", pettype);
 		return;
 	}
 
 	//find the NPC data for the specified NPC type
-	const NPCType *base = database.LoadNPCTypesData(record.npc_type);
+	const NPCType *base = content_db.LoadNPCTypesData(record.npc_type);
 	if(base == nullptr) {
 		Message(Chat::Red, "Unable to load NPC data for pet %s", pettype);
 		LogError("Unable to load NPC data for pet [{}] (NPC ID [{}]), check pets and npc_types tables", pettype, record.npc_type);
@@ -230,7 +231,7 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 	memcpy(npc_type, base, sizeof(NPCType));
 
 	// If pet power is set to -1 in the DB, use stat scaling
-	if ((this->IsClient() 
+	if ((this->IsClient()
 #ifdef BOTS
 		|| this->IsBot()
 #endif
@@ -298,39 +299,16 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 		strcat(npc_type->name, "`s_pet");
 	}
 
-	//handle beastlord pet appearance
-	if(record.petnaming == 2)
-	{
-		switch(GetBaseRace())
-		{
-		case VAHSHIR:
-			npc_type->race = TIGER;
-			npc_type->size *= 0.8f;
-			break;
-		case TROLL:
-			npc_type->race = ALLIGATOR;
-			npc_type->size *= 2.5f;
-			break;
-		case OGRE:
-			npc_type->race = BEAR;
-			npc_type->texture = 3;
-			npc_type->gender = 2;
-			break;
-		case BARBARIAN:
-			npc_type->race = WOLF;
-			npc_type->texture = 2;
-			break;
-		case IKSAR:
-			npc_type->race = WOLF;
-			npc_type->texture = 0;
-			npc_type->gender = 1;
-			npc_type->size *= 2.0f;
-			npc_type->luclinface = 0;
-			break;
-		default:
-			npc_type->race = WOLF;
-			npc_type->texture = 0;
-		}
+	// Beastlord Pets
+	if(record.petnaming == 2) {
+		uint16 race_id = GetBaseRace();
+		auto beastlord_pet_data = content_db.GetBeastlordPetData(race_id);
+		npc_type->race = beastlord_pet_data.race_id;
+		npc_type->texture = beastlord_pet_data.texture;
+		npc_type->helmtexture = beastlord_pet_data.helm_texture;
+		npc_type->gender = beastlord_pet_data.gender;
+		npc_type->size *= beastlord_pet_data.size_modifier;
+		npc_type->luclinface = beastlord_pet_data.face;
 	}
 
 	// handle monster summoning pet appearance
@@ -348,7 +326,7 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 									"130, 139, 141, 183, 236, 237, 238, 239, 254, 266, 329, 330, 378, 379, "
 									"380, 381, 382, 383, 404, 522) "
 									"ORDER BY RAND() LIMIT 1", zone->GetShortName());
-		auto results = database.QueryDatabase(query);
+		auto results = content_db.QueryDatabase(query);
 		if (!results.Success()) {
 			safe_delete(npc_type);
 			return;
@@ -364,7 +342,7 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 			monsterid = 567;
 
 		// give the summoned pet the attributes of the monster we found
-		const NPCType* monster = database.LoadNPCTypesData(monsterid);
+		const NPCType* monster = content_db.LoadNPCTypesData(monsterid);
 		if(monster) {
 			npc_type->race = monster->race;
 			npc_type->size = monster->size;
@@ -385,15 +363,15 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 	// the base items for the pet. These are always loaded
 	// so that a rank 1 suspend minion does not kill things
 	// like the special back items some focused pets may receive.
-	uint32 petinv[EQEmu::invslot::EQUIPMENT_COUNT];
+	uint32 petinv[EQ::invslot::EQUIPMENT_COUNT];
 	memset(petinv, 0, sizeof(petinv));
-	const EQEmu::ItemData *item = nullptr;
+	const EQ::ItemData *item = nullptr;
 
-	if (database.GetBasePetItems(record.equipmentset, petinv)) {
-		for (int i = EQEmu::invslot::EQUIPMENT_BEGIN; i <= EQEmu::invslot::EQUIPMENT_END; i++)
+	if (content_db.GetBasePetItems(record.equipmentset, petinv)) {
+		for (int i = EQ::invslot::EQUIPMENT_BEGIN; i <= EQ::invslot::EQUIPMENT_END; i++)
 			if (petinv[i]) {
 				item = database.GetItem(petinv[i]);
-				npc->AddLootDrop(item, &npc->itemlist, 0, 1, 127, true, true);
+				npc->AddLootDrop(item, &npc->itemlist, NPC::NewLootDropEntry(), true);
 			}
 	}
 
@@ -432,7 +410,21 @@ Pet::Pet(NPCType *type_data, Mob *owner, PetType type, uint16 spell_id, int16 po
 	petpower = power;
 	SetOwnerID(owner->GetID());
 	SetPetSpellID(spell_id);
-	taunting = true;
+
+	// All pets start at false on newer clients. The client
+	// turns it on and tracks the state.
+	taunting=false;
+
+	// Older clients didn't track state, and default taunting is on (per @mackal)
+	// Familiar and animation pets don't get taunt until an AA.
+	if (owner && owner->IsClient()) {
+		if (!(owner->CastToClient()->ClientVersionBit() & EQ::versions::maskUFAndLater)) {
+			if ((typeofpet != petFamiliar && typeofpet != petAnimation) || 
+				aabonuses.PetCommands[PET_TAUNT]) {
+				taunting=true;
+			}
+		}
+	}
 
 	// Class should use npc constructor to set light properties
 }
@@ -524,10 +516,10 @@ void NPC::GetPetState(SpellBuff_Struct *pet_buffs, uint32 *items, char *name) {
 	strn0cpy(name, GetName(), 64);
 
 	//save their items, we only care about what they are actually wearing
-	memcpy(items, equipment, sizeof(uint32) * EQEmu::invslot::EQUIPMENT_COUNT);
+	memcpy(items, equipment, sizeof(uint32) * EQ::invslot::EQUIPMENT_COUNT);
 
 	//save their buffs.
-	for (int i=EQEmu::invslot::EQUIPMENT_BEGIN; i < GetPetMaxTotalSlots(); i++) {
+	for (int i=EQ::invslot::EQUIPMENT_BEGIN; i < GetPetMaxTotalSlots(); i++) {
 		if (buffs[i].spellid != SPELL_UNKNOWN) {
 			pet_buffs[i].spellid = buffs[i].spellid;
 			pet_buffs[i].effect_type = i+1;
@@ -612,19 +604,19 @@ void NPC::SetPetState(SpellBuff_Struct *pet_buffs, uint32 *items) {
 	}
 
 	//restore their equipment...
-	for (i = EQEmu::invslot::EQUIPMENT_BEGIN; i <= EQEmu::invslot::EQUIPMENT_END; i++) {
-		if(items[i] == 0)
+	for (i = EQ::invslot::EQUIPMENT_BEGIN; i <= EQ::invslot::EQUIPMENT_END; i++) {
+		if (items[i] == 0) {
 			continue;
+		}
 
-		const EQEmu::ItemData* item2 = database.GetItem(items[i]);
+		const EQ::ItemData *item2 = database.GetItem(items[i]);
 
 		if (item2) {
-			bool noDrop=(item2->NoDrop == 0); // Field is reverse logic
-			bool petCanHaveNoDrop = (RuleB(Pets, CanTakeNoDrop) && 
-				_CLIENTPET(this) && GetPetType() <= petOther);
+			bool noDrop           = (item2->NoDrop == 0); // Field is reverse logic
+			bool petCanHaveNoDrop = (RuleB(Pets, CanTakeNoDrop) && _CLIENTPET(this) && GetPetType() <= petOther);
 
 			if (!noDrop || petCanHaveNoDrop) {
-				AddLootDrop(item2, &itemlist, 0, 1, 255, true, true);
+				AddLootDrop(item2, &itemlist, NPC::NewLootDropEntry(), true);
 			}
 		}
 	}
@@ -679,7 +671,7 @@ bool ZoneDatabase::GetBasePetItems(int32 equipmentset, uint32 *items) {
 			{
 				slot = atoi(row[0]);
 
-				if (slot > EQEmu::invslot::EQUIPMENT_END)
+				if (slot > EQ::invslot::EQUIPMENT_END)
 					continue;
 
 				if (items[slot] == 0)
@@ -700,4 +692,30 @@ bool Pet::CheckSpellLevelRestriction(uint16 spell_id)
 	if (owner)
 		return owner->CheckSpellLevelRestriction(spell_id);
 	return true;
+}
+
+BeastlordPetData::PetStruct ZoneDatabase::GetBeastlordPetData(uint16 race_id) {	
+	BeastlordPetData::PetStruct beastlord_pet_data;
+	std::string query = fmt::format(
+		SQL(
+			SELECT
+			`pet_race`, `texture`, `helm_texture`, `gender`, `size_modifier`, `face`
+			FROM `pets_beastlord_data`
+			WHERE `player_race` = {}
+		),
+		race_id
+	);
+	auto results = QueryDatabase(query);
+	if (!results.Success() || results.RowCount() != 1) {
+		return beastlord_pet_data;
+	}
+
+	auto row = results.begin();
+	beastlord_pet_data.race_id = atoi(row[0]);
+	beastlord_pet_data.texture = atoi(row[1]);
+	beastlord_pet_data.helm_texture = atoi(row[2]);
+	beastlord_pet_data.gender = atoi(row[3]);
+	beastlord_pet_data.size_modifier = atof(row[4]);
+	beastlord_pet_data.face = atoi(row[5]);
+	return beastlord_pet_data;
 }

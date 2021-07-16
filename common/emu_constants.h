@@ -27,7 +27,7 @@
 
 
 // local definitions are the result of using hybrid-client or server-only values and methods
-namespace EQEmu
+namespace EQ
 {
 	using RoF2::IINVALID;
 	using RoF2::INULL;
@@ -193,7 +193,7 @@ namespace EQEmu
 	} // namespace invaug
 
 	namespace constants {
-		const EQEmu::versions::ClientVersion CHARACTER_CREATION_CLIENT = EQEmu::versions::ClientVersion::Titanium;
+		const EQ::versions::ClientVersion CHARACTER_CREATION_CLIENT = EQ::versions::ClientVersion::Titanium;
 
 		using RoF2::constants::EXPANSION;
 		using RoF2::constants::EXPANSION_BIT;
@@ -317,12 +317,21 @@ namespace EQEmu
 		QuestControlGrid = -1
 	};
 
+	namespace consent {
+		enum eConsentType : uint8 {
+			Normal = 0,
+			Group,
+			Raid,
+			Guild
+		};
+	}; // namespace consent
+
 } /*EQEmu*/
 
 #endif /*COMMON_EMU_CONSTANTS_H*/
 
 /*	hack list to prevent circular references
 	
-	eq_limits.h:EQEmu::inventory::LookupEntry::InventoryTypeSize[n];
+	eq_limits.h:EQ::inventory::LookupEntry::InventoryTypeSize[n];
 
 */

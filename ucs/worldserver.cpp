@@ -48,7 +48,7 @@ void Client55ToServerSayLink(std::string& serverSayLink, const std::string& clie
 
 WorldServer::WorldServer()
 {
-	m_connection.reset(new EQ::Net::ServertalkClient(Config->WorldIP, Config->WorldTCPPort, false, "UCS", Config->SharedKey));
+	m_connection = std::make_unique<EQ::Net::ServertalkClient>(Config->WorldIP, Config->WorldTCPPort, false, "UCS", Config->SharedKey);
 	m_connection->OnMessage(std::bind(&WorldServer::ProcessMessage, this, std::placeholders::_1, std::placeholders::_2));
 }
 
@@ -61,7 +61,7 @@ void WorldServer::ProcessMessage(uint16 opcode, EQ::Net::Packet &p)
 	ServerPacket tpack(opcode, p);
 	ServerPacket *pack = &tpack;
 
-	LogInfo("Received Opcode: {:#04x}", opcode);
+	LogNetcode("Received Opcode: {:#04x}", opcode);
 
 	switch (opcode)
 	{
@@ -101,18 +101,18 @@ void WorldServer::ProcessMessage(uint16 opcode, EQ::Net::Packet &p)
 		{
 			std::string new_message;
 			switch (c->GetClientVersion()) {
-			case EQEmu::versions::ClientVersion::Titanium:
+			case EQ::versions::ClientVersion::Titanium:
 				Client45ToServerSayLink(new_message, Message.substr(1, std::string::npos));
 				break;
-			case EQEmu::versions::ClientVersion::SoF:
-			case EQEmu::versions::ClientVersion::SoD:
-			case EQEmu::versions::ClientVersion::UF:
+			case EQ::versions::ClientVersion::SoF:
+			case EQ::versions::ClientVersion::SoD:
+			case EQ::versions::ClientVersion::UF:
 				Client50ToServerSayLink(new_message, Message.substr(1, std::string::npos));
 				break;
-			case EQEmu::versions::ClientVersion::RoF:
+			case EQ::versions::ClientVersion::RoF:
 				Client55ToServerSayLink(new_message, Message.substr(1, std::string::npos));
 				break;
-			case EQEmu::versions::ClientVersion::RoF2:
+			case EQ::versions::ClientVersion::RoF2:
 			default:
 				new_message = Message.substr(1, std::string::npos);
 				break;

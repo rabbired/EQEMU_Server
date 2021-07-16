@@ -195,7 +195,11 @@ enum {
 	COUNTER_AVOID_DAMAGE = 44,
 	PROX_AGGRO = 45,
 	IMMUNE_RANGED_ATTACKS = 46,
-	MAX_SPECIAL_ATTACK = 47
+	IMMUNE_DAMAGE_CLIENT = 47,
+	IMMUNE_DAMAGE_NPC = 48,
+	IMMUNE_AGGRO_CLIENT = 49,
+	IMMUNE_AGGRO_NPC = 50,
+	MAX_SPECIAL_ATTACK = 51
 };
 
 typedef enum {	//fear states
@@ -268,7 +272,7 @@ enum class LootRequestType : uint8 {
 	Self,
 	AllowedPVE,
 	AllowedPVPAll,
-	AllowedPVPSingle, // can make this 'AllowedPVPVariable' and allow values between 1 and EQEmu::invtype::POSSESSIONS_SIZE
+	AllowedPVPSingle, // can make this 'AllowedPVPVariable' and allow values between 1 and EQ::invtype::POSSESSIONS_SIZE
 	AllowedPVPDefined,
 };
 
@@ -385,8 +389,8 @@ struct StatBonuses {
 	int32	inhibitmelee;
 	float	AggroRange;							// when calculate just replace original value with this
 	float	AssistRange;
-	int32	skillmod[EQEmu::skills::HIGHEST_SKILL + 1];
-	int32	skillmodmax[EQEmu::skills::HIGHEST_SKILL + 1];
+	int32	skillmod[EQ::skills::HIGHEST_SKILL + 1];
+	int32	skillmodmax[EQ::skills::HIGHEST_SKILL + 1];
 	int		effective_casting_level;
 	int		adjusted_casting_skill;				// SPA 112 for fizzles
 	int		reflect_chance;						// chance to reflect incoming spell
@@ -403,7 +407,7 @@ struct StatBonuses {
 	int32	StrikeThrough;						// PoP: Strike Through %
 	int32	MeleeMitigation;					//i = Shielding
 	int32	MeleeMitigationEffect;				//i = Spell Effect Melee Mitigation
-	int32	CriticalHitChance[EQEmu::skills::HIGHEST_SKILL + 2];	//i
+	int32	CriticalHitChance[EQ::skills::HIGHEST_SKILL + 2];	//i
 	int32	CriticalSpellChance;				//i
 	int32	SpellCritDmgIncrease;				//i
 	int32	SpellCritDmgIncNoStack;				// increase
@@ -430,10 +434,10 @@ struct StatBonuses {
 	int32	MeleeSkillCheck;					//i
 	uint8	MeleeSkillCheckSkill;
 	int32	HitChance;							//HitChance/15 == % increase i = Accuracy (Item: Accuracy)
-	int32	HitChanceEffect[EQEmu::skills::HIGHEST_SKILL + 2];	//Spell effect Chance to Hit, straight percent increase
-	int32	DamageModifier[EQEmu::skills::HIGHEST_SKILL + 2];	//i
-	int32	DamageModifier2[EQEmu::skills::HIGHEST_SKILL + 2];	//i
-	int32	MinDamageModifier[EQEmu::skills::HIGHEST_SKILL + 2]; //i
+	int32	HitChanceEffect[EQ::skills::HIGHEST_SKILL + 2];	//Spell effect Chance to Hit, straight percent increase
+	int32	DamageModifier[EQ::skills::HIGHEST_SKILL + 2];	//i
+	int32	DamageModifier2[EQ::skills::HIGHEST_SKILL + 2];	//i
+	int32	MinDamageModifier[EQ::skills::HIGHEST_SKILL + 2]; //i
 	int32	ProcChance;							// ProcChance/10 == % increase i = CombatEffects
 	int32	ProcChanceSPA;						// ProcChance from spell effects
 	int32	ExtraAttackChance;
@@ -441,13 +445,13 @@ struct StatBonuses {
 	int32	DivineSaveChance[2];				// Second Chance (base1 = chance, base2 = spell on trigger)
 	uint32	DeathSave[4];						// Death Pact [0](value = 1 partial 2 = full) [1]=slot [2]=LvLimit [3]=HealAmt
 	int32	FlurryChance;
-	int32	Accuracy[EQEmu::skills::HIGHEST_SKILL + 2];			//Accuracy/15 == % increase	[Spell Effect: Accuracy)
+	int32	Accuracy[EQ::skills::HIGHEST_SKILL + 2];			//Accuracy/15 == % increase	[Spell Effect: Accuracy)
 	int32	HundredHands;						//extra haste, stacks with all other haste	i
 	int32	MeleeLifetap;						//i
 	int32	Vampirism;							//i
 	int32	HealRate;							// Spell effect that influences effectiveness of heals
 	int32	MaxHPChange;						// Spell Effect
-	int16	SkillDmgTaken[EQEmu::skills::HIGHEST_SKILL + 2];		// All Skills + -1
+	int16	SkillDmgTaken[EQ::skills::HIGHEST_SKILL + 2];		// All Skills + -1
 	int32	HealAmt;							// Item Effect
 	int32	SpellDmg;							// Item Effect
 	int32	Clairvoyance;						// Item Effect
@@ -456,9 +460,10 @@ struct StatBonuses {
 	uint32	SpellTriggers[MAX_SPELL_TRIGGER];	// Innate/Spell/Item Spells that trigger when you cast
 	uint32	SpellOnKill[MAX_SPELL_TRIGGER*3];	// Chance to proc after killing a mob
 	uint32	SpellOnDeath[MAX_SPELL_TRIGGER*2];	// Chance to have effect cast when you die
-	int32	CritDmgMod[EQEmu::skills::HIGHEST_SKILL + 2];		// All Skills + -1
-	int32	SkillReuseTime[EQEmu::skills::HIGHEST_SKILL + 1];	// Reduces skill timers
-	int32	SkillDamageAmount[EQEmu::skills::HIGHEST_SKILL + 2];	// All Skills + -1
+	int32	CritDmgMod[EQ::skills::HIGHEST_SKILL + 2];		// All Skills + -1
+	int32	CritDmgModNoStack[EQ::skills::HIGHEST_SKILL + 2];// Critical melee damage modifier by percent, does not stack.
+	int32	SkillReuseTime[EQ::skills::HIGHEST_SKILL + 1];	// Reduces skill timers
+	int32	SkillDamageAmount[EQ::skills::HIGHEST_SKILL + 2];	// All Skills + -1
 	int32	TwoHandBluntBlock;					// chance to block when wielding two hand blunt weapon
 	uint32	ItemManaRegenCap;					// Increases the amount of mana you have can over the cap(aa effect)
 	int32	GravityEffect;						// Indictor of spell effect
@@ -481,7 +486,7 @@ struct StatBonuses {
 	uint8	FocusEffects[HIGHEST_FOCUS+1];		// Stores the focus effectid for each focustype you have.
 	int16	FocusEffectsWorn[HIGHEST_FOCUS+1];	// Optional to allow focus effects to be applied additively from worn slot
 	bool	NegateEffects;						// Check if you contain a buff with negate effect. (only spellbonuses)
-	int32	SkillDamageAmount2[EQEmu::skills::HIGHEST_SKILL + 2];	// Adds skill specific damage
+	int32	SkillDamageAmount2[EQ::skills::HIGHEST_SKILL + 2];	// Adds skill specific damage
 	uint32	NegateAttacks[3];					// 0 = bool HasEffect 1 = Buff Slot 2 = Max damage absorbed per hit
 	uint32	MitigateMeleeRune[4];				// 0 = Mitigation value 1 = Buff Slot 2 = Max mitigation per hit 3 = Rune Amt
 	uint32	MeleeThresholdGuard[3];				// 0 = Mitigation value 1 = Buff Slot 2 = Min damage to trigger.
@@ -490,7 +495,8 @@ struct StatBonuses {
 	uint32	MitigateDotRune[4];					// 0 = Mitigation value 1 = Buff Slot 2 = Max mitigation per tick 3 = Rune Amt
 	bool	TriggerMeleeThreshold;				// Has Melee Threshhold
 	bool	TriggerSpellThreshold;				// Has Spell Threshhold
-	uint32	ManaAbsorbPercentDamage[2];			// 0 = Mitigation value 1 = Buff Slot
+	uint32	ManaAbsorbPercentDamage;			// 0 = Mitigation value 
+	int32	EnduranceAbsorbPercentDamage[2];	// 0 = Mitigation value 1 = Percent Endurance drain per HP lost 
 	int32	ShieldBlock;						// Chance to Shield Block
 	int32	BlockBehind;						// Chance to Block Behind (with our without shield)
 	bool	CriticalRegenDecay;					// increase critical regen chance, decays based on spell level cast
@@ -514,11 +520,19 @@ struct StatBonuses {
 	int32	Metabolism;							// Food/drink consumption rates.
 	bool	Sanctuary;							// Sanctuary effect, lowers place on hate list until cast on others.
 	int32   FactionModPct;						// Modifies amount of faction gained.
-	bool	LimitToSkill[EQEmu::skills::HIGHEST_SKILL + 2];		// Determines if we need to search for a skill proc.
+	bool	LimitToSkill[EQ::skills::HIGHEST_SKILL + 2];		// Determines if we need to search for a skill proc.
 	uint32  SkillProc[MAX_SKILL_PROCS];			// Max number of spells containing skill_procs.
 	uint32  SkillProcSuccess[MAX_SKILL_PROCS];	// Max number of spells containing skill_procs_success.
 	uint32  PC_Pet_Rampage[2];					// 0= % chance to rampage, 1=damage modifier
 	uint32  PC_Pet_Flurry;						// Percent chance flurry from double attack
+	int32   Attack_Accuracy_Max_Percent;		// Increase ATK accuracy by percent.
+	int32   AC_Mitigation_Max_Percent;			// Increase AC mitigation by percent
+	int32   AC_Avoidance_Max_Percent;			// Increase AC avoidance by percent
+	int32   Damage_Taken_Position_Mod[2];		// base = percent melee damage reduction base2 0=back 1=front. [0]Back[1]Front
+	int32   Melee_Damage_Position_Mod[2];		// base = percent melee damage increase base2 0=back 1=front. [0]Back[1]Front
+	int32   Double_Backstab_Front;				// base = percent chance to double back stab front
+	int32   DS_Mitigation_Amount;				// base = flat amt DS mitigation. Negative value to reduce
+	int32	DS_Mitigation_Percentage;			// base = percent amt of DS mitigation. Negative value to reduce	
 
 	// AAs
 	int8	Packrat;							//weight reduction for items, 1 point = 10%
@@ -549,7 +563,7 @@ struct StatBonuses {
 	int32	CombatStability;					// Melee damage mitigation.
 	int32	DoubleRiposte;						// Chance to double riposte
 	int32	GiveDoubleRiposte[3];				// 0=Regular Chance, 1=Skill Attack Chance, 2=Skill
-	uint32	RaiseSkillCap[EQEmu::skills::HIGHEST_SKILL + 1];		// Raise a specific skill cap (base1= value, base2=skill)
+	uint32	RaiseSkillCap[EQ::skills::HIGHEST_SKILL + 1];		// Raise a specific skill cap (base1= value, base2=skill)
 	int32	Ambidexterity;						// Increase chance to duel wield by adding bonus 'skill'.
 	int32	PetMaxHP;							// Increase the max hp of your pet.
 	int32	PetFlurry;							// Chance for pet to flurry.
@@ -578,7 +592,7 @@ struct StatBonuses {
 	uint16	extra_xtargets;						// extra xtarget entries
 	bool	ShroudofStealth;					// rogue improved invisiblity
 	uint16  ReduceFallDamage;					// reduce fall damage by percent
-	int32	ReduceTradeskillFail[EQEmu::skills::HIGHEST_SKILL + 1]; // Reduces chance for trade skills to fail by percent.
+	int32	ReduceTradeskillFail[EQ::skills::HIGHEST_SKILL + 1]; // Reduces chance for trade skills to fail by percent.
 	uint8	TradeSkillMastery;					// Allow number of tradeskills to exceed 200 skill.
 	int16	NoBreakAESneak;						// Percent value
 	int16	FeignedCastOnChance;				// Percent Value
@@ -647,6 +661,19 @@ enum {
 	SKILLUP_FAILURE = 2
 };
 
+enum {
+	GridCircular,
+	GridRandom10,
+	GridRandom,
+	GridPatrol,
+	GridOneWayRepop,
+	GridRand5LoS,
+	GridOneWayDepop,
+	GridCenterPoint,
+	GridRandomCenterPoint,
+	GridRandomPath
+};
+
 typedef enum {
 	petFamiliar,		//only listens to /pet get lost
 	petAnimation,		//does not listen to any commands
@@ -684,7 +711,7 @@ struct MercData {
 	uint32	NPCID;
 };
 
-namespace EQEmu
+namespace EQ
 {
 	class ItemInstance;
 }
@@ -726,7 +753,7 @@ public:
 
 private:
 	// Send item data for trade item to other person involved in trade
-	void SendItemData(const EQEmu::ItemInstance* inst, int16 dest_slot_id);
+	void SendItemData(const EQ::ItemInstance* inst, int16 dest_slot_id);
 
 	uint32 with_id;
 	Mob* owner;
@@ -770,7 +797,14 @@ struct DamageHitInfo {
 	int offense;
 	int tohit;
 	int hand;
-	EQEmu::skills::SkillType skill;
+	EQ::skills::SkillType skill;
+};
+
+struct ExpeditionInvite
+{
+	uint32_t    expedition_id;
+	std::string inviter_name;
+	std::string swap_remove_name;
 };
 
 #endif

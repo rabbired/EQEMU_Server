@@ -73,6 +73,7 @@ public:
 	void SetPetSpellID(int id);
 	uint32 GetMaxDamage(int level);
 	void SetTaunting(bool t);
+	bool IsTaunting();
 	void PickPocket(Lua_Client thief);
 	void StartSwarmTimer(uint32 duration);
 	void DoClassAttacks(Lua_Mob target);
@@ -134,6 +135,11 @@ public:
 	void SetSimpleRoamBox(float box_size);
 	void SetSimpleRoamBox(float box_size, float move_distance);
 	void SetSimpleRoamBox(float box_size, float move_distance, int move_delay);
+	void RecalculateSkills();
+	void ScaleNPC(uint8 npc_level);
+	bool IsRaidTarget();
+	void ChangeLastName(const char *lastname);
+	void ClearLastName();
 };
 
 #endif

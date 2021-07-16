@@ -237,6 +237,11 @@ void Lua_NPC::SetTaunting(bool t) {
 	self->SetTaunting(t);
 }
 
+bool Lua_NPC::IsTaunting() {
+	Lua_Safe_Call_Bool();
+	return self->IsTaunting();
+}
+
 void Lua_NPC::PickPocket(Lua_Client thief) {
 	Lua_Safe_Call_Void();
 	self->PickPocket(thief);
@@ -547,6 +552,36 @@ void Lua_NPC::SetSimpleRoamBox(float box_size, float move_distance, int move_del
 	self->SetSimpleRoamBox(box_size, move_distance, move_delay);
 }
 
+void Lua_NPC::RecalculateSkills()
+{
+	Lua_Safe_Call_Void();
+	self->RecalculateSkills();
+}
+
+void Lua_NPC::ScaleNPC(uint8 npc_level)
+{
+	Lua_Safe_Call_Void();
+	self->ScaleNPC(npc_level);
+}
+
+bool Lua_NPC::IsRaidTarget()
+{
+	Lua_Safe_Call_Bool();
+	return self->IsRaidTarget();
+}
+
+void Lua_NPC::ChangeLastName(const char *lastname)
+{
+	Lua_Safe_Call_Void();
+	self->ChangeLastName(lastname);
+}
+
+void Lua_NPC::ClearLastName()
+{
+	Lua_Safe_Call_Void();
+	self->ClearLastName();
+}
+
 luabind::scope lua_register_npc() {
 	return luabind::class_<Lua_NPC, Lua_Mob>("NPC")
 		.def(luabind::constructor<>())
@@ -596,6 +631,7 @@ luabind::scope lua_register_npc() {
 		.def("SetPetSpellID", (void(Lua_NPC::*)(int))&Lua_NPC::SetPetSpellID)
 		.def("GetMaxDamage", (uint32(Lua_NPC::*)(int))&Lua_NPC::GetMaxDamage)
 		.def("SetTaunting", (void(Lua_NPC::*)(bool))&Lua_NPC::SetTaunting)
+		.def("IsTaunting", (bool(Lua_NPC::*)(void))&Lua_NPC::IsTaunting)
 		.def("PickPocket", (void(Lua_NPC::*)(Lua_Client))&Lua_NPC::PickPocket)
 		.def("StartSwarmTimer", (void(Lua_NPC::*)(uint32))&Lua_NPC::StartSwarmTimer)
 		.def("DoClassAttacks", (void(Lua_NPC::*)(Lua_Mob))&Lua_NPC::DoClassAttacks)
@@ -657,7 +693,12 @@ luabind::scope lua_register_npc() {
 		.def("MerchantOpenShop", (void(Lua_NPC::*)(void))&Lua_NPC::MerchantOpenShop)
 		.def("MerchantCloseShop", (void(Lua_NPC::*)(void))&Lua_NPC::MerchantCloseShop)
 		.def("GetRawAC", (int(Lua_NPC::*)(void))&Lua_NPC::GetRawAC)
-		.def("GetAvoidanceRating", &Lua_NPC::GetAvoidanceRating);
+		.def("GetAvoidanceRating", &Lua_NPC::GetAvoidanceRating)
+		.def("RecalculateSkills", (void(Lua_NPC::*)(void))&Lua_NPC::RecalculateSkills)
+		.def("ScaleNPC", (void(Lua_NPC::*)(uint8))&Lua_NPC::ScaleNPC)
+		.def("IsRaidTarget", (bool(Lua_NPC::*)(void))&Lua_NPC::IsRaidTarget)
+		.def("ChangeLastName", (void(Lua_NPC::*)(const char*))&Lua_NPC::ChangeLastName)
+		.def("ClearLastName", (void(Lua_NPC::*)(void))&Lua_NPC::ClearLastName);
 }
 
 #endif

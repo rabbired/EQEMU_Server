@@ -32,22 +32,10 @@
 #endif
 
 #include "map.h"
+#include "water_map.h"
 
 extern Zone* zone;
 //#define LOSDEBUG 6
-
-//look around a client for things which might aggro the client.
-void EntityList::CheckClientAggro(Client *around)
-{
-	for (auto it = mob_list.begin(); it != mob_list.end(); ++it) {
-		Mob *mob = it->second;
-		if (mob->IsClient())	//also ensures that mob != around
-			continue;
-
-		if (mob->CheckWillAggro(around) && !mob->CheckAggro(around))
-			mob->AddToHateList(around, 25);
-	}
-}
 
 void EntityList::DescribeAggro(Client *towho, NPC *from_who, float d, bool verbose) {
 	float d2 = d*d;
@@ -74,7 +62,7 @@ void EntityList::DescribeAggro(Client *towho, NPC *from_who, float d, bool verbo
 		} else if(my_primary < 0) {
 			strcpy(namebuf, "(Special faction)");
 		} else {
-			if(!database.GetFactionName(my_primary, namebuf, sizeof(namebuf)))
+			if(!content_db.GetFactionName(my_primary, namebuf, sizeof(namebuf)))
 				strcpy(namebuf, "(Unknown)");
 		}
 		towho->Message(Chat::White, ".. I am on faction %s (%d)\n", namebuf, my_primary);
@@ -152,7 +140,7 @@ void NPC::DescribeAggro(Client *towho, Mob *mob, bool verbose) {
 
 	if (RuleB(Aggro, UseLevelAggro))
 	{
-		if (GetLevel() < RuleI(Aggro, MinAggroLevel) && mob->GetLevelCon(GetLevel()) == CON_GRAY && GetBodyType() != 3)
+		if (GetLevel() < RuleI(Aggro, MinAggroLevel) && mob->GetLevelCon(GetLevel()) == CON_GRAY && GetBodyType() != 3 && !AlwaysAggro())
 		{
 			towho->Message(Chat::White, "...%s is red to me (basically)", mob->GetName(),	dist2, iAggroRange2);
 			return;
@@ -160,7 +148,7 @@ void NPC::DescribeAggro(Client *towho, Mob *mob, bool verbose) {
 	}
 	else
 	{
-		if(GetINT() > RuleI(Aggro, IntAggroThreshold) && mob->GetLevelCon(GetLevel()) == CON_GRAY ) {
+		if(GetINT() > RuleI(Aggro, IntAggroThreshold) && mob->GetLevelCon(GetLevel()) == CON_GRAY && !AlwaysAggro()) {
 			towho->Message(Chat::White, "...%s is red to me (basically)", mob->GetName(),
 			dist2, iAggroRange2);
 			return;
@@ -183,7 +171,7 @@ void NPC::DescribeAggro(Client *towho, Mob *mob, bool verbose) {
 			towho->Message(Chat::White, "...%s is on special faction %d", mob->GetName(), mob_primary);
 		} else {
 			char namebuf[256];
-			if(!database.GetFactionName(mob_primary, namebuf, sizeof(namebuf)))
+			if(!content_db.GetFactionName(mob_primary, namebuf, sizeof(namebuf)))
 				strcpy(namebuf, "(Unknown)");
 			std::list<struct NPCFaction*>::iterator cur,end;
 			cur = faction_list.begin();
@@ -250,6 +238,11 @@ bool Mob::CheckWillAggro(Mob *mob) {
 		if (!mob->CastToClient()->ClientFinishedLoading() || mob->CastToClient()->IsHoveringForRespawn() || mob->CastToClient()->bZoning)
 			return false;
 	}
+	
+	// We don't want to aggro clients outside of water if we're water only.
+	if (mob->IsClient() && mob->CastToClient()->GetLastRegion() != RegionTypeWater && IsUnderwaterOnly()) {
+		return false;
+	}
 
 	/**
 	 * Pets shouldn't scan for aggro
@@ -259,7 +252,7 @@ bool Mob::CheckWillAggro(Mob *mob) {
 	}
 
 	Mob *pet_owner = mob->GetOwner();
-	if (pet_owner && pet_owner->IsClient()) {
+	if (pet_owner && pet_owner->IsClient() && (!RuleB(Aggro, AggroPlayerPets) || pet_owner->CastToClient()->GetGM())) {
 		return false;
 	}
 
@@ -331,7 +324,7 @@ bool Mob::CheckWillAggro(Mob *mob) {
 	//old InZone check taken care of above by !mob->CastToClient()->Connected()
 	(
 		( GetLevel() >= RuleI(Aggro, MinAggroLevel))
-		||(GetBodyType() == 3)
+		||(GetBodyType() == 3) || AlwaysAggro()
 		||( mob->IsClient() && mob->CastToClient()->IsSitting() )
 		||( mob->GetLevelCon(GetLevel()) != CON_GRAY)
 
@@ -365,6 +358,7 @@ bool Mob::CheckWillAggro(Mob *mob) {
 		//old InZone check taken care of above by !mob->CastToClient()->Connected()
 		(
 			( GetINT() <= RuleI(Aggro, IntAggroThreshold) )
+			|| AlwaysAggro()
 			||( mob->IsClient() && mob->CastToClient()->IsSitting() )
 			||( mob->GetLevelCon(GetLevel()) != CON_GRAY)
 
@@ -396,26 +390,11 @@ bool Mob::CheckWillAggro(Mob *mob) {
 	LogAggro("Dist^2: [{}]\n", dist2);
 	LogAggro("Range^2: [{}]\n", iAggroRange2);
 	LogAggro("Faction: [{}]\n", fv);
+	LogAggro("AlwaysAggroFlag: [{}]\n", AlwaysAggro());
 	LogAggro("Int: [{}]\n", GetINT());
 	LogAggro("Con: [{}]\n", GetLevelCon(mob->GetLevel()));
 
 	return(false);
-}
-
-Mob* EntityList::AICheckNPCtoNPCAggro(Mob* sender, float iAggroRange, float iAssistRange) {
-	if (!sender || !sender->IsNPC())
-		return(nullptr);
-
-	auto it = npc_list.begin();
-	while (it != npc_list.end()) {
-		Mob *mob = it->second;
-
-		if (sender->CheckWillAggro(mob))
-			return mob;
-		++it;
-	}
-
-	return nullptr;
 }
 
 int EntityList::GetHatedCount(Mob *attacker, Mob *exclude, bool inc_gray_con)
@@ -462,82 +441,11 @@ int EntityList::GetHatedCount(Mob *attacker, Mob *exclude, bool inc_gray_con)
 	return Count;
 }
 
-void EntityList::AIYellForHelp(Mob* sender, Mob* attacker) {
-	if(!sender || !attacker)
-		return;
-	if (sender->GetPrimaryFaction() == 0 )
-		return; // well, if we dont have a faction set, we're gonna be indiff to everybody
-
-	if (sender->HasAssistAggro())
-		return;
-
-	for (auto it = npc_list.begin(); it != npc_list.end(); ++it) {
-		NPC *mob = it->second;
-		if (!mob)
-			continue;
-
-		if (mob->CheckAggro(attacker))
-			continue;
-
-		if (sender->NPCAssistCap() >= RuleI(Combat, NPCAssistCap))
-			break;
-
-		float r = mob->GetAssistRange();
-		r = r * r;
-
-		if (
-			mob != sender
-			&& mob != attacker
-//			&& !mob->IsCorpse()
-//			&& mob->IsAIControlled()
-			&& mob->GetPrimaryFaction() != 0
-			&& DistanceSquared(mob->GetPosition(), sender->GetPosition()) <= r
-			&& !mob->IsEngaged()
-			&& ((!mob->IsPet()) || (mob->IsPet() && mob->GetOwner() && !mob->GetOwner()->IsClient()))
-				// If we're a pet we don't react to any calls for help if our owner is a client
-			)
-		{
-			//if they are in range, make sure we are not green...
-			//then jump in if they are our friend
-			if(mob->GetLevel() >= 50 || attacker->GetLevelCon(mob->GetLevel()) != CON_GRAY)
-			{
-				bool useprimfaction = false;
-				if(mob->GetPrimaryFaction() == sender->CastToNPC()->GetPrimaryFaction())
-				{
-					const NPCFactionList *cf = database.GetNPCFactionEntry(mob->GetNPCFactionID());
-					if(cf){
-						if(cf->assistprimaryfaction != 0)
-							useprimfaction = true;
-					}
-				}
-
-				if(useprimfaction || sender->GetReverseFactionCon(mob) <= FACTION_AMIABLE )
-				{
-					//attacking someone on same faction, or a friend
-					//Father Nitwit: make sure we can see them.
-					if(mob->CheckLosFN(sender)) {
-#if (EQDEBUG>=5)
-						LogDebug("AIYellForHelp(\"[{}]\",\"[{}]\") [{}] attacking [{}] Dist [{}] Z [{}]",
-							sender->GetName(), attacker->GetName(), mob->GetName(),
-							attacker->GetName(), DistanceSquared(mob->GetPosition(),
-							sender->GetPosition()), std::abs(sender->GetZ()+mob->GetZ()));
-#endif
-						mob->AddToHateList(attacker, 25, 0, false);
-						sender->AddAssistCap();
-					}
-				}
-			}
-		}
-	}
-}
-
-/*
-returns false if attack should not be allowed
-I try to list every type of conflict that's possible here, so it's easy
-to see how the decision is made. Yea, it could be condensed and made
-faster, but I'm doing it this way to make it readable and easy to modify
-*/
-
+/**
+ * @param target
+ * @param isSpellAttack
+ * @return
+ */
 bool Mob::IsAttackAllowed(Mob *target, bool isSpellAttack)
 {
 
@@ -559,6 +467,12 @@ bool Mob::IsAttackAllowed(Mob *target, bool isSpellAttack)
 	if(target->GetSpecialAbility(NO_HARM_FROM_CLIENT)){
 		return false;
 	}
+
+	if (target->GetSpecialAbility(IMMUNE_DAMAGE_CLIENT) && IsClient())
+		return false;
+
+	if (target->GetSpecialAbility(IMMUNE_DAMAGE_NPC) && IsNPC())
+		return false;
 
 	// can't damage own pet (applies to everthing)
 	Mob *target_owner = target->GetOwner();
@@ -892,7 +806,7 @@ bool Mob::IsBeneficialAllowed(Mob *target)
 	return false;
 }
 
-bool Mob::CombatRange(Mob* other)
+bool Mob::CombatRange(Mob* other, float fixed_size_mod, bool aeRampage)
 {
 	if(!other)
 		return(false);
@@ -917,13 +831,25 @@ bool Mob::CombatRange(Mob* other)
 
 	// this could still use some work, but for now it's an improvement....
 
-	if (size_mod > 29)
+	if (size_mod > 29) {
 		size_mod *= size_mod;
-	else if (size_mod > 19)
+	} else if (size_mod > 19) {
 		size_mod *= size_mod * 2;
-	else
+	} else {
 		size_mod *= size_mod * 4;
+	}
 
+	if (other->GetRace() == 184)		// Lord Vyemm and other velious dragons
+	{
+		size_mod *= 1.75;
+	}
+	if (other->GetRace() == 122)		// Dracoliche in Fear.  Skeletal Dragon
+	{
+		size_mod *= 2.25;
+	}
+
+	size_mod *= RuleR(Combat,HitBoxMod);		// used for testing sizemods on different races.
+	size_mod *= fixed_size_mod;					// used to extend the size_mod
 
 	// prevention of ridiculously sized hit boxes
 	if (size_mod > 10000)
@@ -957,6 +883,15 @@ bool Mob::CombatRange(Mob* other)
 		else
 			SetPseudoRoot(false);
 	}
+	if(aeRampage) {
+		float multiplyer = GetSize() * RuleR(Combat, AERampageSafeZone);
+		float ramp_range = (size_mod * multiplyer);
+		if (_DistNoRoot <= ramp_range) {
+			return true;
+		} else {
+			return false;
+		}
+	}
 
 	if (_DistNoRoot <= size_mod)
 	{
@@ -964,13 +899,11 @@ bool Mob::CombatRange(Mob* other)
 		if (flymode != GravityBehavior::Flying && _zDist > 500 && !CheckLastLosState()) {
 			return false;
 		}
-
 		return true;
 	}
 	return false;
 }
 
-//Father Nitwit's LOS code
 bool Mob::CheckLosFN(Mob *other)
 {
 	bool Result = false;
@@ -1217,7 +1150,9 @@ int32 Mob::CheckHealAggroAmount(uint16 spell_id, Mob *target, uint32 heal_possib
 
 	for (int o = 0; o < EFFECT_COUNT; o++) {
 		switch (spells[spell_id].effectid[o]) {
-		case SE_CurrentHP: {
+			case SE_CurrentHP:
+			case SE_PercentalHeal:
+			{
 			if (heal_possible == 0) {
 				AggroAmount += 1;
 				break;

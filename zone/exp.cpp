@@ -194,6 +194,10 @@ uint32 Client::CalcEXP(uint8 conlevel) {
 		}
 	}
 
+	if (RuleR(Character, FinalExpMultiplier) >= 0) {
+		in_add_exp *= RuleR(Character, FinalExpMultiplier);
+	}
+
 	return in_add_exp;
 }
 
@@ -211,7 +215,15 @@ uint32 Client::GetExperienceForKill(Mob *against)
 
 	if (against && against->IsNPC()) {
 		uint32 level = (uint32)against->GetLevel();
-		return EXP_FORMULA;
+		uint32 ret = EXP_FORMULA;
+
+		auto mod = against->GetKillExpMod();
+		if(mod >= 0) {
+			ret *= mod;
+			ret /= 100;
+		}
+
+		return ret;
 	}
 
 	return 0;
@@ -309,6 +321,14 @@ void Client::CalculateStandardAAExp(uint32 &add_aaxp, uint8 conlevel, bool resex
 		if (zone->level_exp_mod[GetLevel()].ExpMod) {
 			add_aaxp *= zone->level_exp_mod[GetLevel()].AAExpMod;
 		}
+	}
+
+	if (RuleR(Character, FinalExpMultiplier) >= 0) {
+		add_aaxp *= RuleR(Character, FinalExpMultiplier);
+	}
+
+	if (RuleB(Character, EnableCharacterEXPMods)) {
+		add_aaxp *= GetAAEXPModifier(this->GetZoneID());
 	}
 
 	add_aaxp = (uint32)(RuleR(Character, AAExpMultiplier) * add_aaxp * aatotalmod);
@@ -466,6 +486,14 @@ void Client::CalculateExp(uint32 in_add_exp, uint32 &add_exp, uint32 &add_aaxp, 
 		}
 	}
 
+	if (RuleR(Character, FinalExpMultiplier) >= 0) {
+		add_exp *= RuleR(Character, FinalExpMultiplier);
+	}
+
+	if (RuleB(Character, EnableCharacterEXPMods)) {
+		add_exp *= GetEXPModifier(this->GetZoneID());
+	}
+
 	add_exp = GetEXP() + add_exp;
 }
 
@@ -563,22 +591,22 @@ void Client::SetEXP(uint32 set_exp, uint32 set_aaxp, bool isrezzexp) {
 		}
 
 		if (isrezzexp) {
-			if (RuleI(Character, ShowExpValues) > 0) 
+			if (RuleI(Character, ShowExpValues) > 0)
 				Message(Chat::Experience, "You regain %s experience from resurrection. %s", exp_amount_message.c_str(), exp_percent_message.c_str());
 			else MessageString(Chat::Experience, REZ_REGAIN);
 		} else {
 			if (membercount > 1) {
-				if (RuleI(Character, ShowExpValues) > 0) 
+				if (RuleI(Character, ShowExpValues) > 0)
 					Message(Chat::Experience, "You have gained %s party experience! %s", exp_amount_message.c_str(), exp_percent_message.c_str());
 				else MessageString(Chat::Experience, GAIN_GROUPXP);
 			}
 			else if (IsRaidGrouped()) {
-				if (RuleI(Character, ShowExpValues) > 0) 
+				if (RuleI(Character, ShowExpValues) > 0)
 					Message(Chat::Experience, "You have gained %s raid experience! %s", exp_amount_message.c_str(), exp_percent_message.c_str());
 				else MessageString(Chat::Experience, GAIN_RAIDEXP);
-			} 
+			}
 			else {
-				if (RuleI(Character, ShowExpValues) > 0) 
+				if (RuleI(Character, ShowExpValues) > 0)
 					Message(Chat::Experience, "You have gained %s experience! %s", exp_amount_message.c_str(), exp_percent_message.c_str());
 				else MessageString(Chat::Experience, GAIN_XP);
 			}
@@ -652,12 +680,22 @@ void Client::SetEXP(uint32 set_exp, uint32 set_aaxp, bool isrezzexp) {
 		m_pp.aapoints += last_unspentAA;
 
 		//figure out how many points were actually gained
-		/*uint32 gained = m_pp.aapoints - last_unspentAA;*/	//unused
+		uint32 gained = (m_pp.aapoints - last_unspentAA);
 
 		//Message(Chat::Yellow, "You have gained %d skill points!!", m_pp.aapoints - last_unspentAA);
-		char val1[20]={0};
-		MessageString(Chat::Experience, GAIN_ABILITY_POINT, ConvertArray(m_pp.aapoints, val1),m_pp.aapoints == 1 ? "" : "(s)");	//You have gained an ability point! You now have %1 ability point%2.
-		
+		char val1[20] = { 0 };
+		char val2[20] = { 0 };
+		if (gained == 1 && m_pp.aapoints == 1)
+			MessageString(Chat::Experience, GAIN_SINGLE_AA_SINGLE_AA, ConvertArray(m_pp.aapoints, val1)); //You have gained an ability point!  You now have %1 ability point.
+		else if (gained == 1 && m_pp.aapoints > 1)
+			MessageString(Chat::Experience, GAIN_SINGLE_AA_MULTI_AA, ConvertArray(m_pp.aapoints, val1)); //You have gained an ability point!  You now have %1 ability points.
+		else
+			MessageString(Chat::Experience, GAIN_MULTI_AA_MULTI_AA, ConvertArray(gained, val1), ConvertArray(m_pp.aapoints, val2)); //You have gained %1 ability point(s)!  You now have %2 ability point(s).
+			
+		if (RuleB(AA, SoundForAAEarned)) {
+			SendSound();
+		}
+
 		/* QS: PlayerLogAARate */
 		if (RuleB(QueryServ, PlayerLogAARate)){
 			int add_points = (m_pp.aapoints - last_unspentAA);
@@ -703,7 +741,8 @@ void Client::SetEXP(uint32 set_exp, uint32 set_aaxp, bool isrezzexp) {
 			else
 				Message(Chat::Yellow, "Welcome to level %i!", check_level);
 
-			if (check_level == RuleI(Character, DeathItemLossLevel))
+			if (check_level == RuleI(Character, DeathItemLossLevel) &&
+			    m_ClientVersionBit & EQ::versions::maskUFAndEarlier)
 				MessageString(Chat::Yellow, CORPSE_ITEM_LOST);
 
 			if (check_level == RuleI(Character, DeathExpLossLevel))
@@ -798,7 +837,7 @@ void Client::SetLevel(uint8 set_level, bool command)
 		/* QS: PlayerLogLevels */
 		if (RuleB(QueryServ, PlayerLogLevels)){
 			std::string event_desc = StringFormat("Leveled UP :: to Level:%i from Level:%i in zoneid:%i instid:%i", set_level, m_pp.level, this->GetZoneID(), this->GetInstanceID());
-			QServ->PlayerLogEvent(Player_Log_Levels, this->CharacterID(), event_desc); 
+			QServ->PlayerLogEvent(Player_Log_Levels, this->CharacterID(), event_desc);
 		}
 	}
 	else if (set_level < m_pp.level){
@@ -836,7 +875,7 @@ void Client::SetLevel(uint8 set_level, bool command)
 		SetHP(CalcMaxHP()); // Why not, lets give them a free heal
 	}
 
-	if (RuleI(World, PVPMinLevel) > 0 && level >= RuleI(World, PVPMinLevel) && m_pp.pvp == 0) SetPVP(true);	
+	if (RuleI(World, PVPMinLevel) > 0 && level >= RuleI(World, PVPMinLevel) && m_pp.pvp == 0) SetPVP(true);
 
 	DoTributeUpdate();
 	SendHPUpdate();
@@ -940,30 +979,32 @@ uint32 Client::GetEXPForLevel(uint16 check_level)
 	return finalxp;
 }
 
-void Client::AddLevelBasedExp(uint8 exp_percentage, uint8 max_level) 
-{ 
+void Client::AddLevelBasedExp(uint8 exp_percentage, uint8 max_level, bool ignore_mods)
+{
 	uint32	award;
 	uint32	xp_for_level;
 
-	if (exp_percentage > 100) 
-	{ 
-		exp_percentage = 100; 
-	} 
+	if (exp_percentage > 100)
+	{
+		exp_percentage = 100;
+	}
 
 	if (!max_level || GetLevel() < max_level)
-	{ 
-		max_level = GetLevel(); 
-	} 
+	{
+		max_level = GetLevel();
+	}
 
 	xp_for_level = GetEXPForLevel(max_level + 1) - GetEXPForLevel(max_level);
-	award = xp_for_level * exp_percentage / 100; 
+	award = xp_for_level * exp_percentage / 100;
 
-	if(RuleB(Zone, LevelBasedEXPMods))
-	{
-		if(zone->level_exp_mod[GetLevel()].ExpMod)
-		{
+	if (RuleB(Zone, LevelBasedEXPMods) && !ignore_mods) {
+		if (zone->level_exp_mod[GetLevel()].ExpMod) {
 			award *= zone->level_exp_mod[GetLevel()].ExpMod;
 		}
+	}
+
+	if (RuleR(Character, FinalExpMultiplier) >= 0) {
+		award *= RuleR(Character, FinalExpMultiplier);
 	}
 
 	uint32 newexp = GetEXP() + award;
@@ -1123,7 +1164,7 @@ uint32 Client::GetCharMaxLevelFromQGlobal() {
 	while(iter != globalMap.end()) {
 		if((*iter).name.compare("CharMaxLevel") == 0){
 			return atoi((*iter).value.c_str());
-		} 
+		}
 		++iter;
 		++gcount;
 	}

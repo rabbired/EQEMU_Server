@@ -15,6 +15,8 @@
 #include "bot_database.h"
 #endif
 
+#define WOLF 42
+
 class Client;
 class Corpse;
 class Merc;
@@ -23,7 +25,6 @@ class Petition;
 class Spawn2;
 class SpawnGroupList;
 class Trap;
-struct CharacterEventLog_Struct;
 struct Door;
 struct ExtendedProfile_Struct;
 struct NPCType;
@@ -31,7 +32,7 @@ struct PlayerCorpse_Struct;
 struct ZonePoint;
 struct npcDecayTimes_Struct;
 
-namespace EQEmu
+namespace EQ
 {
 	class ItemInstance;
 }
@@ -47,11 +48,12 @@ struct wplist {
 	float z;
 	int pause;
 	float heading;
+	bool centerpoint;
 };
 
 #pragma pack(1)
 struct DBnpcspells_entries_Struct {
-	int16	spellid;
+	uint16	spellid;
 	uint8	minlevel;
 	uint8	maxlevel;
 	uint32	type;
@@ -105,7 +107,7 @@ struct DBnpcspellseffects_Struct {
 };
 
 struct DBTradeskillRecipe_Struct {
-	EQEmu::skills::SkillType tradeskill;
+	EQ::skills::SkillType tradeskill;
 	int16 skill_needed;
 	uint16 trivial;
 	bool nofail;
@@ -152,8 +154,9 @@ struct PetInfo {
 	uint32	Mana;
 	float	size;
 	SpellBuff_Struct	Buffs[PET_BUFF_COUNT];
-	uint32	Items[EQEmu::invslot::EQUIPMENT_COUNT];
+	uint32	Items[EQ::invslot::EQUIPMENT_COUNT];
 	char	Name[64];
+	bool	taunting;
 };
 
 struct ZoneSpellsBlocked {
@@ -242,6 +245,17 @@ struct ClientMercEntry {
 	uint32 npcid;
 };
 
+namespace BeastlordPetData {	
+	struct PetStruct {
+		uint16 race_id = WOLF;
+		uint8 texture = 0;
+		uint8 helm_texture = 0;
+		uint8 gender = 2;
+		float size_modifier = 1.0f;
+		uint8 face = 0;
+	};
+}
+
 class ZoneDatabase : public SharedDatabase {
 	typedef std::list<ServerLootItem_Struct*> ItemList;
 public:
@@ -250,11 +264,11 @@ public:
 	virtual ~ZoneDatabase();
 
 	/* Objects and World Containers  */
-	void	LoadWorldContainer(uint32 parentid, EQEmu::ItemInstance* container);
-	void	SaveWorldContainer(uint32 zone_id, uint32 parent_id, const EQEmu::ItemInstance* container);
+	void	LoadWorldContainer(uint32 parentid, EQ::ItemInstance* container);
+	void	SaveWorldContainer(uint32 zone_id, uint32 parent_id, const EQ::ItemInstance* container);
 	void	DeleteWorldContainer(uint32 parent_id,uint32 zone_id);
-	uint32	AddObject(uint32 type, uint32 icon, const Object_Struct& object, const EQEmu::ItemInstance* inst);
-	void	UpdateObject(uint32 id, uint32 type, uint32 icon, const Object_Struct& object, const EQEmu::ItemInstance* inst);
+	uint32	AddObject(uint32 type, uint32 icon, const Object_Struct& object, const EQ::ItemInstance* inst);
+	void	UpdateObject(uint32 id, uint32 type, uint32 icon, const Object_Struct& object, const EQ::ItemInstance* inst);
 	void	DeleteObject(uint32 id);
 	Ground_Spawns*	LoadGroundSpawns(uint32 zone_id, int16 version, Ground_Spawns* gs);
 
@@ -265,7 +279,7 @@ public:
 	void	DeleteTraderItem(uint32 char_id);
 	void	DeleteTraderItem(uint32 char_id,uint16 slot_id);
 
-	EQEmu::ItemInstance* LoadSingleTraderItem(uint32 char_id, int uniqueid);
+	EQ::ItemInstance* LoadSingleTraderItem(uint32 char_id, int uniqueid);
 	Trader_Struct* LoadTraderItem(uint32 char_id);
 	TraderCharges_Struct* LoadTraderItemWithCharges(uint32 char_id);
 
@@ -318,7 +332,7 @@ public:
 
 	bool SaveCharacterAA(uint32 character_id, uint32 aa_id, uint32 current_level, uint32 charges);
 	bool SaveCharacterBandolier(uint32 character_id, uint8 bandolier_id, uint8 bandolier_slot, uint32 item_id, uint32 icon, const char* bandolier_name);
-	bool SaveCharacterBindPoint(uint32 character_id, const BindStruct &bind, uint32 bind_num);
+	bool SaveCharacterBindPoint(uint32 character_id, const BindStruct &bind, uint32 bind_number);
 	bool SaveCharacterCurrency(uint32 character_id, PlayerProfile_Struct* pp);
 	bool SaveCharacterData(uint32 character_id, uint32 account_id, PlayerProfile_Struct* pp, ExtendedProfile_Struct* m_epp);
 	bool SaveCharacterDisc(uint32 character_id, uint32 slot_id, uint32 disc_id);
@@ -330,6 +344,11 @@ public:
 	bool SaveCharacterSkill(uint32 character_id, uint32 skill_id, uint32 value);
 	bool SaveCharacterSpell(uint32 character_id, uint32 spell_id, uint32 slot_id);
 	bool SaveCharacterTribute(uint32 character_id, PlayerProfile_Struct* pp);
+	
+	double GetAAEXPModifier(uint32 character_id, uint32 zone_id) const;
+	double GetEXPModifier(uint32 character_id, uint32 zone_id) const;
+	void SetAAEXPModifier(uint32 character_id, uint32 zone_id, double aa_modifier);
+	void SetEXPModifier(uint32 character_id, uint32 zone_id, double exp_modifier);
 
 	/* Character Inventory  */
 	bool	NoRentExpired(const char* name);
@@ -356,6 +375,8 @@ public:
 	bool		DeleteCharacterCorpse(uint32 dbid);
 	bool		SummonAllCharacterCorpses(uint32 char_id, uint32 dest_zoneid, uint16 dest_instanceid, const glm::vec4& position);
 	bool		SummonAllGraveyardCorpses(uint32 cur_zoneid, uint32 dest_zoneid, uint16 dest_instanceid, const glm::vec4& position);
+	int			CountCharacterCorpses(uint32 char_id);
+	int			CountCharacterCorpsesByZoneID(uint32 char_id, uint32 zone_id);
 	bool		UnburyCharacterCorpse(uint32 dbid, uint32 new_zoneid, uint16 dest_instanceid, const glm::vec4& position);
 	bool		LoadCharacterCorpses(uint32 iZoneID, uint16 iInstanceID);
 	bool		DeleteGraveyard(uint32 zone_id, uint32 graveyard_id);
@@ -364,13 +385,15 @@ public:
 	uint32		SendCharacterCorpseToGraveyard(uint32 dbid, uint32 zoneid, uint16 instanceid, const glm::vec4& position);
 	uint32		CreateGraveyardRecord(uint32 graveyard_zoneid, const glm::vec4& position);
 	uint32		AddGraveyardIDToZone(uint32 zone_id, uint32 graveyard_id);
-	uint32		SaveCharacterCorpse(uint32 charid, const char* charname, uint32 zoneid, uint16 instanceid, PlayerCorpse_Struct* dbpc, const glm::vec4& position);
-	uint32		UpdateCharacterCorpse(uint32 dbid, uint32 charid, const char* charname, uint32 zoneid, uint16 instanceid, PlayerCorpse_Struct* dbpc, const glm::vec4& position, bool rezzed = false);
+	uint32		SaveCharacterCorpse(uint32 charid, const char* charname, uint32 zoneid, uint16 instanceid, PlayerCorpse_Struct* dbpc, const glm::vec4& position, uint32 guildid);
+	uint32		UpdateCharacterCorpse(uint32 dbid, uint32 charid, const char* charname, uint32 zoneid, uint16 instanceid, PlayerCorpse_Struct* dbpc, const glm::vec4& position, uint32 guildid, bool rezzed = false);
+	uint32		UpdateCharacterCorpseConsent(uint32 charid, uint32 guildid);
 	uint32		GetFirstCorpseID(uint32 char_id);
 	uint32		GetCharacterCorpseCount(uint32 char_id);
 	uint32		GetCharacterCorpseID(uint32 char_id, uint8 corpse);
 	uint32		GetCharacterCorpseItemAt(uint32 corpse_id, uint16 slotid);
 	uint32		GetPlayerCorpseTimeLeft(uint8 corpse, uint8 type);
+	void        SendCharacterCorpseToNonInstance(uint32 corpse_db_id);
 
 	/* Faction   */
 	bool		GetNPCFactionList(uint32 npcfaction_id, int32* faction_id, int32* value, uint8* temp, int32* primary_faction = 0);
@@ -425,6 +448,7 @@ public:
 	void		AddWP(Client *c, uint32 gridid, uint32 wpnum, const glm::vec4& position, uint32 pause, uint16 zoneid);
 	uint32		AddWPForSpawn(Client *c, uint32 spawn2id, const glm::vec4& position, uint32 pause, int type1, int type2, uint16 zoneid);
 	void		ModifyGrid(Client *c, bool remove, uint32 id, uint8 type = 0, uint8 type2 = 0, uint16 zoneid = 0);
+	bool		GridExistsInZone(uint32 zone_id, uint32 grid_id);
 	void		ModifyWP(Client *c, uint32 grid_id, uint32 wp_num, const glm::vec3& location, uint32 script = 0, uint16 zoneid = 0);
 	uint8		GetGridType(uint32 grid, uint32 zoneid);
 	uint8		GetGridType2(uint32 grid, uint16 zoneid);
@@ -432,6 +456,7 @@ public:
 	void        AssignGrid(Client *client, int grid, int spawn2id);
 	int			GetHighestGrid(uint32 zoneid);
 	int			GetHighestWaypoint(uint32 zoneid, uint32 gridid);
+	int			GetRandomWaypointLocFromGrid(glm::vec4 &loc, uint16 zoneid, int grid);
 
 	/* NPCs  */
 
@@ -447,8 +472,9 @@ public:
 	bool		GetPetEntry(const char *pet_type, PetRecord *into);
 	bool		GetPoweredPetEntry(const char *pet_type, int16 petpower, PetRecord *into);
 	bool		GetBasePetItems(int32 equipmentset, uint32 *items);
+	BeastlordPetData::PetStruct GetBeastlordPetData(uint16 race_id);
 	void		AddLootTableToNPC(NPC* npc, uint32 loottable_id, ItemList* itemlist, uint32* copper, uint32* silver, uint32* gold, uint32* plat);
-	void		AddLootDropToNPC(NPC* npc, uint32 lootdrop_id, ItemList* itemlist, uint8 droplimit, uint8 mindrop);
+	void		AddLootDropToNPC(NPC* npc, uint32 lootdrop_id, ItemList* item_list, uint8 droplimit, uint8 mindrop);
 	uint32		GetMaxNPCSpellsID();
 	uint32		GetMaxNPCSpellsEffectsID();
 	bool GetAuraEntry(uint16 spell_id, AuraRecord &record);
@@ -483,7 +509,7 @@ public:
 	void	DeleteMerchantTemp(uint32 npcid, uint32 slot);
 
 	/* Tradeskills  */
-	bool	GetTradeRecipe(const EQEmu::ItemInstance* container, uint8 c_type, uint32 some_id, uint32 char_id, DBTradeskillRecipe_Struct *spec);
+	bool	GetTradeRecipe(const EQ::ItemInstance* container, uint8 c_type, uint32 some_id, uint32 char_id, DBTradeskillRecipe_Struct *spec);
 	bool	GetTradeRecipe(uint32 recipe_id, uint8 c_type, uint32 some_id, uint32 char_id, DBTradeskillRecipe_Struct *spec);
 	uint32	GetZoneForage(uint32 ZoneID, uint8 skill); /* for foraging */
 	uint32	GetZoneFishing(uint32 ZoneID, uint8 skill, uint32 &npc_id, uint8 &npc_chance);
@@ -498,8 +524,6 @@ public:
 	bool	DoorIsOpen(uint8 door_id,const char* zone_name);
 	void	SetDoorPlace(uint8 value,uint8 door_id,const char* zone_name);
 	bool	LoadDoors(int32 door_count, Door *into, const char *zone_name, int16 version);
-	bool	CheckGuildDoor(uint8 doorid,uint16 guild_id, const char* zone);
-	bool	SetGuildDoor(uint8 doorid,uint16 guild_id, const char* zone);
 	uint32	GetGuildEQID(uint32 guilddbid);
 	void	UpdateDoorGuildID(int doorid, int guild_id);
 	int32	GetDoorsCount(uint32* oMaxID, const char *zone_name, int16 version);
@@ -546,7 +570,6 @@ public:
 		* REALLY HAS NO BETTER SECTION
 	*/
 	bool	logevents(const char* accountname,uint32 accountid,uint8 status,const char* charname,const char* target, const char* descriptiontype, const char* description,int event_nid);
-	void	GetEventLogs(const char* name,char* target,uint32 account_id=0,uint8 eventid=0,char* detail=0,char* timestamp=0, CharacterEventLog_Struct* cel=0);
 	uint32	GetKarma(uint32 acct_id);
 	void	UpdateKarma(uint32 acct_id, uint32 amount);
 
@@ -572,6 +595,7 @@ protected:
 };
 
 extern ZoneDatabase database;
+extern ZoneDatabase content_db;
 
 #endif /*ZONEDB_H_*/
 

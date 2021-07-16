@@ -35,17 +35,31 @@
 DBcore::DBcore()
 {
 	mysql_init(&mysql);
-	pHost     = 0;
-	pUser     = 0;
-	pPassword = 0;
-	pDatabase = 0;
-	pCompress = false;
-	pSSL      = false;
-	pStatus   = Closed;
+	pHost           = nullptr;
+	pUser           = nullptr;
+	pPassword       = nullptr;
+	pDatabase       = nullptr;
+	pCompress       = false;
+	pSSL            = false;
+	pStatus         = Closed;
 }
 
 DBcore::~DBcore()
 {
+	/**
+	 * This prevents us from doing a double free in multi-tenancy setups where we
+	 * are re-using the default database connection pointer when we dont have an
+	 * external configuration setup ex: (content_database)
+	 */
+	std::string mysql_connection_host;
+	if (mysql.host) {
+		mysql_connection_host = mysql.host;
+	}
+
+	if (GetOriginHost() != mysql_connection_host) {
+		return;
+	}
+
 	mysql_close(&mysql);
 	safe_delete_array(pHost);
 	safe_delete_array(pUser);
@@ -69,6 +83,13 @@ MySQLRequestResult DBcore::QueryDatabase(std::string query, bool retryOnFailureO
 	return QueryDatabase(query.c_str(), query.length(), retryOnFailureOnce);
 }
 
+bool DBcore::DoesTableExist(std::string table_name)
+{
+	auto results = QueryDatabase(fmt::format("SHOW TABLES LIKE '{}'", table_name));
+
+	return results.RowCount() > 0;
+}
+
 MySQLRequestResult DBcore::QueryDatabase(const char *query, uint32 querylen, bool retryOnFailureOnce)
 {
 	BenchTimer timer;
@@ -80,6 +101,8 @@ MySQLRequestResult DBcore::QueryDatabase(const char *query, uint32 querylen, boo
 	if (pStatus != Connected) {
 		Open();
 	}
+
+
 
 	// request query. != 0 indicates some kind of error.
 	if (mysql_real_query(&mysql, query, querylen) != 0) {
@@ -115,14 +138,14 @@ MySQLRequestResult DBcore::QueryDatabase(const char *query, uint32 querylen, boo
 		auto errorBuffer = new char[MYSQL_ERRMSG_SIZE];
 		snprintf(errorBuffer, MYSQL_ERRMSG_SIZE, "#%i: %s", mysql_errno(&mysql), mysql_error(&mysql));
 
-		/* Implement Logging at the Root */
+		/**
+		 * Error logging
+		 */
 		if (mysql_errno(&mysql) > 0 && strlen(query) > 0) {
-			if (LogSys.log_settings[Logs::MySQLError].is_category_enabled == 1)
-				Log(Logs::General, Logs::MySQLError, "%i: %s \n %s", mysql_errno(&mysql), mysql_error(&mysql), query);
+			LogMySQLError("[{}] [{}]\n[{}]", mysql_errno(&mysql), mysql_error(&mysql), query);
 		}
 
 		return MySQLRequestResult(nullptr, 0, 0, 0, 0, mysql_errno(&mysql), errorBuffer);
-
 	}
 
 	// successful query. get results.
@@ -143,10 +166,8 @@ MySQLRequestResult DBcore::QueryDatabase(const char *query, uint32 querylen, boo
 
 	if (LogSys.log_settings[Logs::MySQLQuery].is_category_enabled == 1) {
 		if ((strncasecmp(query, "select", 6) == 0)) {
-			LogF(
-				Logs::General,
-				Logs::MySQLQuery,
-				"{0} ({1} row{2} returned) ({3}ms)",
+			LogMySQLQuery(
+				"{0} ({1} row{2} returned) ({3}s)",
 				query,
 				requestResult.RowCount(),
 				requestResult.RowCount() == 1 ? "" : "s",
@@ -154,10 +175,8 @@ MySQLRequestResult DBcore::QueryDatabase(const char *query, uint32 querylen, boo
 			);
 		}
 		else {
-			LogF(
-				Logs::General,
-				Logs::MySQLQuery,
-				"{0} ({1} row{2} affected) ({3}ms)",
+			LogMySQLQuery(
+				"{0} ({1} row{2} affected) ({3}s)",
 				query,
 				requestResult.RowsAffected(),
 				requestResult.RowsAffected() == 1 ? "" : "s",
@@ -204,10 +223,10 @@ bool DBcore::Open(
 )
 {
 	LockMutex lock(&MDatabase);
-	safe_delete(pHost);
-	safe_delete(pUser);
-	safe_delete(pPassword);
-	safe_delete(pDatabase);
+	safe_delete_array(pHost);
+	safe_delete_array(pUser);
+	safe_delete_array(pPassword);
+	safe_delete_array(pDatabase);
 	pHost     = strcpy(new char[strlen(iHost) + 1], iHost);
 	pUser     = strcpy(new char[strlen(iUser) + 1], iUser);
 	pPassword = strcpy(new char[strlen(iPassword) + 1], iPassword);
@@ -248,6 +267,10 @@ bool DBcore::Open(uint32 *errnum, char *errbuf)
 	}
 	if (mysql_real_connect(&mysql, pHost, pUser, pPassword, pDatabase, pPort, 0, flags)) {
 		pStatus = Connected;
+
+		std::string connected_origin_host = pHost;
+		SetOriginHost(connected_origin_host);
+
 		return true;
 	}
 	else {
@@ -262,8 +285,17 @@ bool DBcore::Open(uint32 *errnum, char *errbuf)
 	}
 }
 
+void DBcore::SetMysql(MYSQL *mysql)
+{
+	DBcore::mysql = *mysql;
+}
 
+const std::string &DBcore::GetOriginHost() const
+{
+	return origin_host;
+}
 
-
-
-
+void DBcore::SetOriginHost(const std::string &origin_host)
+{
+	DBcore::origin_host = origin_host;
+}

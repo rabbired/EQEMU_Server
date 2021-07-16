@@ -21,6 +21,14 @@ namespace EQ
 			uv_run(&m_loop, UV_RUN_NOWAIT);
 		}
 
+		void Run() {
+			uv_run(&m_loop, UV_RUN_DEFAULT);
+		}
+
+		void Shutdown() {
+			uv_stop(&m_loop);
+		}
+
 		uv_loop_t* Handle() { return &m_loop; }
 
 	private:

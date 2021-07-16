@@ -33,10 +33,11 @@ Copyright (C) 2001-2016 EQEMu Development Team (http://eqemulator.net)
 #include "string_ids.h"
 #include "titles.h"
 #include "zonedb.h"
+#include "zone_store.h"
 
 extern QueryServ* QServ;
 
-void Mob::TemporaryPets(uint16 spell_id, Mob *targ, const char *name_override, uint32 duration_override, bool followme, bool sticktarg) {
+void Mob::TemporaryPets(uint16 spell_id, Mob *targ, const char *name_override, uint32 duration_override, bool followme, bool sticktarg, uint16 *eye_id) {
 
 	//It might not be a bad idea to put these into the database, eventually..
 
@@ -55,7 +56,7 @@ void Mob::TemporaryPets(uint16 spell_id, Mob *targ, const char *name_override, u
 	}
 
 	PetRecord record;
-	if (!database.GetPoweredPetEntry(spells[spell_id].teleport_zone, act_power, &record))
+	if (!content_db.GetPoweredPetEntry(spells[spell_id].teleport_zone, act_power, &record))
 	{
 		LogError("Unknown swarm pet spell id: {}, check pets table", spell_id);
 		Message(Chat::Red, "Unable to find data for pet %s", spells[spell_id].teleport_zone);
@@ -81,7 +82,7 @@ void Mob::TemporaryPets(uint16 spell_id, Mob *targ, const char *name_override, u
 
 	NPCType *made_npc = nullptr;
 
-	const NPCType *npc_type = database.LoadNPCTypesData(pet.npc_id);
+	const NPCType *npc_type = content_db.LoadNPCTypesData(pet.npc_id);
 	if (npc_type == nullptr) {
 		//log write
 		LogError("Unknown npc type for swarm pet spell id: [{}]", spell_id);
@@ -109,6 +110,8 @@ void Mob::TemporaryPets(uint16 spell_id, Mob *targ, const char *name_override, u
 		glm::vec2(8, 8), glm::vec2(-8, 8), glm::vec2(8, -8), glm::vec2(-8, -8)
 	};
 
+	NPC* swarm_pet_npc = nullptr;
+
 	while (summon_count > 0) {
 		int pet_duration = pet.duration;
 		if (duration_override > 0)
@@ -122,7 +125,7 @@ void Mob::TemporaryPets(uint16 spell_id, Mob *targ, const char *name_override, u
 			memcpy(npc_dup, made_npc, sizeof(NPCType));
 		}
 
-		NPC* swarm_pet_npc = new NPC(
+		swarm_pet_npc = new NPC(
 			(npc_dup != nullptr) ? npc_dup : npc_type,	//make sure we give the NPC the correct data pointer
 			0,
 			GetPosition() + glm::vec4(swarmPetLocations[summon_count], 0.0f, 0.0f),
@@ -162,6 +165,10 @@ void Mob::TemporaryPets(uint16 spell_id, Mob *targ, const char *name_override, u
 		summon_count--;
 	}
 
+	if (swarm_pet_npc && IsClient() && eye_id != nullptr) {
+		*eye_id = swarm_pet_npc->GetID();
+	}
+
 	//the target of these swarm pets will take offense to being cast on...
 	if (targ != nullptr)
 		targ->AddToHateList(this, 1, 0);
@@ -180,7 +187,7 @@ void Mob::TypesTemporaryPets(uint32 typesid, Mob *targ, const char *name_overrid
 
 	NPCType *made_npc = nullptr;
 
-	const NPCType *npc_type = database.LoadNPCTypesData(typesid);
+	const NPCType *npc_type = content_db.LoadNPCTypesData(typesid);
 	if(npc_type == nullptr) {
 		//log write
 		LogError("Unknown npc type for swarm pet type id: [{}]", typesid);
@@ -275,7 +282,7 @@ void Mob::WakeTheDead(uint16 spell_id, Mob *target, uint32 duration)
 		return;
 
 	//assuming we have pets in our table; we take the first pet as a base type.
-	const NPCType *base_type = database.LoadNPCTypesData(500);
+	const NPCType *base_type = content_db.LoadNPCTypesData(500);
 	auto make_npc = new NPCType;
 	memcpy(make_npc, base_type, sizeof(NPCType));
 
@@ -435,13 +442,13 @@ void Mob::WakeTheDead(uint16 spell_id, Mob *target, uint32 duration)
 
 	//gear stuff, need to make sure there's
 	//no situation where this stuff can be duped
-	for (int x = EQEmu::invslot::EQUIPMENT_BEGIN; x <= EQEmu::invslot::EQUIPMENT_END; x++)
+	for (int x = EQ::invslot::EQUIPMENT_BEGIN; x <= EQ::invslot::EQUIPMENT_END; x++)
 	{
 		uint32 sitem = 0;
 		sitem = CorpseToUse->GetWornItem(x);
 		if(sitem){
-			const EQEmu::ItemData * itm = database.GetItem(sitem);
-			npca->AddLootDrop(itm, &npca->itemlist, 1, 1, 255, true, true);
+			const EQ::ItemData * itm = database.GetItem(sitem);
+			npca->AddLootDrop(itm, &npca->itemlist, NPC::NewLootDropEntry(), true);
 		}
 	}
 
@@ -487,9 +494,6 @@ void Client::ResetAA() {
 	m_pp.raid_leadership_exp = 0;
 
 	database.DeleteCharacterLeadershipAAs(CharacterID());
-	// undefined for these clients
-	if (ClientVersionBit() & EQEmu::versions::maskTitaniumAndEarlier)
-		Kick("AA Reset on client that doesn't support it");
 }
 
 void Client::SendClearAA()
@@ -1017,6 +1021,24 @@ void Client::ResetAlternateAdvancementTimers() {
 	safe_delete(outapp);
 }
 
+void Client::ResetOnDeathAlternateAdvancement() {
+	for (const auto &aa : aa_ranks) {
+		auto ability_rank = zone->GetAlternateAdvancementAbilityAndRank(aa.first, aa.second.first);
+		auto ability = ability_rank.first;
+		auto rank = ability_rank.second;
+
+		if (!ability)
+			continue;
+
+		if (!rank)
+			continue;
+
+		// since they're dying, we just need to clear the DB
+		if (ability->reset_on_death)
+			p_timers.Clear(&database, rank->spell_type + pTimerAAStart);
+	}
+}
+
 void Client::PurchaseAlternateAdvancementRank(int rank_id) {
 	AA::Rank *rank = zone->GetAlternateAdvancementRank(rank_id);
 	if(!rank) {
@@ -1221,12 +1243,12 @@ void Client::ActivateAlternateAdvancementAbility(int rank_id, int target_id) {
 
 	// Bards can cast instant cast AAs while they are casting another song
 	if(spells[rank->spell].cast_time == 0 && GetClass() == BARD && IsBardSong(casting_spell_id)) {
-		if(!SpellFinished(rank->spell, entity_list.GetMob(target_id), EQEmu::spells::CastingSlot::AltAbility, spells[rank->spell].mana, -1, spells[rank->spell].ResistDiff, false)) {
+		if(!SpellFinished(rank->spell, entity_list.GetMob(target_id), EQ::spells::CastingSlot::AltAbility, spells[rank->spell].mana, -1, spells[rank->spell].ResistDiff, false)) {
 			return;
 		}
 		ExpendAlternateAdvancementCharge(ability->id);
 	} else {
-		if(!CastSpell(rank->spell, target_id, EQEmu::spells::CastingSlot::AltAbility, -1, -1, 0, -1, rank->spell_type + pTimerAAStart, cooldown, nullptr, rank->id)) {
+		if(!CastSpell(rank->spell, target_id, EQ::spells::CastingSlot::AltAbility, -1, -1, 0, -1, rank->spell_type + pTimerAAStart, cooldown, nullptr, rank->id)) {
 			return;
 		}
 	}
@@ -1455,18 +1477,26 @@ bool Mob::CanUseAlternateAdvancementRank(AA::Rank *rank) {
 	//the one titanium hack i will allow
 	//just to make sure we dont crash the client with newer aas
 	//we'll exclude any expendable ones
-	if(IsClient() && CastToClient()->ClientVersionBit() & EQEmu::versions::maskTitaniumAndEarlier) {
+	if(IsClient() && CastToClient()->ClientVersionBit() & EQ::versions::maskTitaniumAndEarlier) {
 		if(ability->charges > 0) {
 			return false;
 		}
 	}
 
-	if(IsClient()) {
-		if(rank->expansion && !(CastToClient()->GetPP().expansions & (1 << (rank->expansion - 1)))) {
+	if (IsClient()) {
+		if (rank->expansion && !(CastToClient()->GetPP().expansions & (1 << (rank->expansion - 1)))) {
 			return false;
 		}
-	} else {
-		if(rank->expansion && !(RuleI(World, ExpansionSettings) & (1 << (rank->expansion - 1)))) {
+	}
+#ifdef BOTS
+	else if (IsBot()) {
+		if (rank->expansion && !(RuleI(Bots, BotExpansionSettings) & (1 << (rank->expansion - 1)))) {
+			return false;
+		}
+	}
+#endif
+	else {
+		if (rank->expansion && !(RuleI(World, ExpansionSettings) & (1 << (rank->expansion - 1)))) {
 			return false;
 		}
 	}
@@ -1563,7 +1593,7 @@ bool Mob::CanPurchaseAlternateAdvancementRank(AA::Rank *rank, bool check_price, 
 
 void Zone::LoadAlternateAdvancement() {
 	LogInfo("Loading Alternate Advancement Data");
-	if(!database.LoadAlternateAdvancementAbilities(aa_abilities,
+	if(!content_db.LoadAlternateAdvancementAbilities(aa_abilities,
 		aa_ranks))
 	{
 		aa_abilities.clear();
@@ -1632,7 +1662,7 @@ bool ZoneDatabase::LoadAlternateAdvancementAbilities(std::unordered_map<int, std
 	LogInfo("Loading Alternate Advancement Abilities");
 	abilities.clear();
 	std::string query = "SELECT id, name, category, classes, races, deities, drakkin_heritage, status, type, charges, "
-		"grant_only, first_rank_id FROM aa_ability WHERE enabled = 1";
+		"grant_only, reset_on_death, first_rank_id FROM aa_ability WHERE enabled = 1";
 	auto results = QueryDatabase(query);
 	if(results.Success()) {
 		for(auto row = results.begin(); row != results.end(); ++row) {
@@ -1649,7 +1679,8 @@ bool ZoneDatabase::LoadAlternateAdvancementAbilities(std::unordered_map<int, std
 			ability->type = atoi(row[8]);
 			ability->charges = atoi(row[9]);
 			ability->grant_only = atoi(row[10]) != 0 ? true : false;
-			ability->first_rank_id = atoi(row[11]);
+			ability->reset_on_death = atoi(row[11]) != 0 ? true : false;
+			ability->first_rank_id = atoi(row[12]);
 			ability->first = nullptr;
 
 			abilities[ability->id] = std::unique_ptr<AA::Ability>(ability);

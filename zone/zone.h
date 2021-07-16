@@ -24,12 +24,19 @@
 #include "../common/types.h"
 #include "../common/random.h"
 #include "../common/string_util.h"
+#include "zonedb.h"
+#include "zone_store.h"
+#include "../common/repositories/grid_repository.h"
+#include "../common/repositories/grid_entries_repository.h"
+#include "../common/repositories/zone_points_repository.h"
 #include "qglobals.h"
 #include "spawn2.h"
 #include "spawngroup.h"
 #include "aa_ability.h"
 #include "pathfinder_interface.h"
 #include "global_loot_manager.h"
+
+class DynamicZone;
 
 struct ZonePoint {
 	float  x;
@@ -44,6 +51,9 @@ struct ZonePoint {
 	uint16 target_zone_id;
 	int32  target_zone_instance;
 	uint32 client_version_mask;
+	bool   is_virtual;
+	int    height;
+	int    width;
 };
 
 struct ZoneClientAuth_Struct {
@@ -73,6 +83,7 @@ struct item_tick_struct {
 };
 
 class Client;
+class Expedition;
 class Map;
 class Mob;
 class WaterMap;
@@ -93,6 +104,7 @@ public:
 	AA::Ability *GetAlternateAdvancementAbilityByRank(int rank_id);
 	AA::Rank *GetAlternateAdvancementRank(int rank_id);
 	bool is_zone_time_localized;
+	bool process_mobs_while_empty;
 	bool AggroLimitReached() { return (aggroedmobs > 10) ? true : false; }
 	bool AllowMercs() const { return (allow_mercs); }
 	bool CanBind() const { return (can_bind); }
@@ -120,6 +132,7 @@ public:
 	bool IsPVPZone() { return pvpzone; }
 	bool IsSpellBlocked(uint32 spell_id, const glm::vec3 &location);
 	bool IsUCSServerAvailable() { return m_ucss_available; }
+	bool IsZone(uint32 zone_id, uint16 instance_id) const;
 	bool LoadGroundSpawns();
 	bool LoadZoneCFG(const char *filename, uint16 instance_id);
 	bool LoadZoneObjects();
@@ -133,7 +146,7 @@ public:
 
 	const char *GetSpellBlockedMessage(uint32 spell_id, const glm::vec3 &location);
 
-	EQEmu::Random random;
+	EQ::Random random;
 	EQTime        zone_time;
 
 	ZonePoint *GetClosestZonePoint(const glm::vec3 &location, const char *to_name, Client *client, float max_distance = 40000.0f);
@@ -154,7 +167,7 @@ public:
 	inline const uint32 &graveyard_zoneid() { return pgraveyard_zoneid; }
 	inline const uint32 GetInstanceID() const { return instanceid; }
 	inline const uint32 GetZoneID() const { return zoneid; }
-	inline glm::vec3 GetSafePoint() { return m_SafePoint; }
+	inline glm::vec4 GetSafePoint() { return m_SafePoint; }
 	inline glm::vec4 GetGraveyardPoint() { return m_Graveyard; }
 	inline std::vector<int> GetGlobalLootTables(NPC *mob) const { return m_global_loot.GetGlobalLootTables(mob); }
 	inline Timer *GetInstanceTimer() { return Instance_Timer; }
@@ -163,13 +176,17 @@ public:
 	inline void ShowNPCGlobalLoot(Client *to, NPC *who) { m_global_loot.ShowNPCGlobalLoot(to, who); }
 	inline void ShowZoneGlobalLoot(Client *to) { m_global_loot.ShowZoneGlobalLoot(to); }
 	int GetZoneTotalBlockedSpells() { return zone_total_blocked_spells; }
+	void DumpMerchantList(uint32 npcid);
 	int SaveTempItem(uint32 merchantid, uint32 npcid, uint32 item, int32 charges, bool sold = false);
 	int32 MobsAggroCount() { return aggroedmobs; }
+	DynamicZone* GetDynamicZone();
 
-	IPathfinder                    *pathing;
-	LinkedList<NPC_Emote_Struct *> NPCEmoteList;
-	LinkedList<Spawn2 *>           spawn2_list;
-	LinkedList<ZonePoint *>        zone_point_list;
+	IPathfinder                                   *pathing;
+	LinkedList<NPC_Emote_Struct *>                NPCEmoteList;
+	LinkedList<Spawn2 *>                          spawn2_list;
+	LinkedList<ZonePoint *>                       zone_point_list;
+	std::vector<ZonePointsRepository::ZonePoints> virtual_zone_point_list;
+
 	Map                            *zonemap;
 	MercTemplate *GetMercTemplate(uint32 template_id);
 	NewZone_Struct                 newzone_data;
@@ -202,8 +219,14 @@ public:
 	std::unordered_map<int, std::unique_ptr<AA::Ability>> aa_abilities;
 	std::unordered_map<int, std::unique_ptr<AA::Rank>>    aa_ranks;
 
+	std::vector<GridRepository::Grid>             zone_grids;
+	std::vector<GridEntriesRepository::GridEntry> zone_grid_entries;
+
+	std::unordered_map<uint32, std::unique_ptr<Expedition>> expedition_cache;
+
 	time_t weather_timer;
 	Timer  spawn2_timer;
+	Timer  hot_reload_timer;
 
 	uint8  weather_intensity;
 	uint8  zone_weather;
@@ -238,6 +261,7 @@ public:
 	void LoadLDoNTrapEntries();
 	void LoadLDoNTraps();
 	void LoadLevelEXPMods();
+	void LoadGrids();
 	void LoadMercSpells();
 	void LoadMercTemplates();
 	void LoadNewMerchantData(uint32 merchantid);
@@ -251,7 +275,6 @@ public:
 	void RemoveAuth(const char *iCharName, const char *iLSKey);
 	void RemoveAuth(uint32 lsid);
 	void Repop(uint32 delay = 0);
-	void RepopClose(const glm::vec4 &client_position, uint32 repop_distance);
 	void RequestUCSServerStatus();
 	void ResetAuth();
 	void SetDate(uint16 year, uint8 month, uint8 day, uint8 hour, uint8 minute);
@@ -266,13 +289,19 @@ public:
 	void SpawnConditionChanged(const SpawnCondition &c, int16 old_value);
 	void SpawnStatus(Mob *client);
 	void StartShutdownTimer(uint32 set_time = (RuleI(Zone, AutoShutdownDelay)));
-	void UpdateHotzone();
 	void UpdateQGlobal(uint32 qid, QGlobal newGlobal);
 	void weatherSend(Client *client = nullptr);
+
+	bool IsQuestHotReloadQueued() const;
+	void SetQuestHotReloadQueued(bool in_quest_hot_reload_queued);
 
 	WaterMap *watermap;
 	ZonePoint *GetClosestZonePoint(const glm::vec3 &location, uint32 to, Client *client, float max_distance = 40000.0f);
 	ZonePoint *GetClosestZonePointWithoutZone(float x, float y, float z, Client *client, float max_distance = 40000.0f);
+
+	Timer GetInitgridsTimer();
+	uint32 GetInstanceTimeRemaining() const;
+	void SetInstanceTimeRemaining(uint32 instance_time_remaining);
 
 	/**
 	 * GMSay Callback for LogSys
@@ -326,6 +355,7 @@ public:
 	 */
 	void mod_init();
 	void mod_repop();
+	void SetIsHotzone(bool is_hotzone);
 
 private:
 	bool      allow_mercs;
@@ -340,12 +370,13 @@ private:
 	bool      m_ucss_available;
 	bool      staticzone;
 	bool      zone_has_current_time;
+	bool      quest_hot_reload_queued;
 	double    max_movement_update_range;
 	char      *long_name;
 	char      *map_name;
 	char      *short_name;
 	char      file_name[16];
-	glm::vec3 m_SafePoint;
+	glm::vec4 m_SafePoint;
 	glm::vec4 m_Graveyard;
 	int       default_ruleset;
 	int       zone_total_blocked_spells;
@@ -354,12 +385,11 @@ private:
 	uint8     zone_type;
 	uint16    instanceversion;
 	uint32    instanceid;
+	uint32    instance_time_remaining;
 	uint32    pgraveyard_id, pgraveyard_zoneid;
 	uint32    pMaxClients;
 	uint32    zoneid;
 	uint32    m_last_ucss_update;
-	uint32    pQueuedMerchantsWorkID;
-	uint32    pQueuedTempMerchantsWorkID;
 
 	GlobalLootManager                   m_global_loot;
 	LinkedList<ZoneClientAuth_Struct *> client_auth_list;
@@ -371,12 +401,10 @@ private:
 	Timer                               *Weather_Timer;
 	Timer                               autoshutdown_timer;
 	Timer                               clientauth_timer;
-	Timer                               hotzone_timer;
-	Timer                               initgrids_timer;    //delayed loading of initial grids.
+	Timer                               initgrids_timer;
 	Timer                               qglobal_purge_timer;
 	ZoneSpellsBlocked                   *blocked_spells;
 
 };
 
 #endif
-

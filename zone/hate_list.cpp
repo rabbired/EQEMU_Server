@@ -155,13 +155,18 @@ Mob* HateList::GetDamageTopOnHateList(Mob* hater)
 	return current;
 }
 
-Mob* HateList::GetClosestEntOnHateList(Mob *hater) {
+Mob* HateList::GetClosestEntOnHateList(Mob *hater, bool skip_mezzed) {
 	Mob* close_entity = nullptr;
 	float close_distance = 99999.9f;
 	float this_distance;
 
 	auto iterator = list.begin();
 	while (iterator != list.end()) {
+		if (skip_mezzed && (*iterator)->entity_on_hatelist->IsMezzed()) {
+			++iterator;
+			continue;
+		}
+
 		this_distance = DistanceSquaredNoZ((*iterator)->entity_on_hatelist->GetPosition(), hater->GetPosition());
 		if ((*iterator)->entity_on_hatelist != nullptr && this_distance <= close_distance) {
 			close_distance = this_distance;
@@ -292,12 +297,12 @@ int HateList::GetHateRatio(Mob *top, Mob *other)
 	if (!top_entry || top_entry->stored_hate_amount < 1)
 		return 999; // shouldn't happen if you call it right :P
 
-	return EQEmu::Clamp(static_cast<int>((other_entry->stored_hate_amount * 100) / top_entry->stored_hate_amount), 1, 999);
+	return EQ::Clamp(static_cast<int>((other_entry->stored_hate_amount * 100) / top_entry->stored_hate_amount), 1, 999);
 }
 
 // skip is used to ignore a certain mob on the list
 // Currently used for getting 2nd on list for aggro meter
-Mob *HateList::GetEntWithMostHateOnList(Mob *center, Mob *skip)
+Mob *HateList::GetEntWithMostHateOnList(Mob *center, Mob *skip, bool skip_mezzed)
 {
 	// hack fix for zone shutdown crashes on some servers
 	if (!zone->IsLoaded())
@@ -331,6 +336,11 @@ Mob *HateList::GetEntWithMostHateOnList(Mob *center, Mob *skip)
 			}
 
 			if (cur->entity_on_hatelist == skip) {
+				++iterator;
+				continue;
+			}
+
+			if (skip_mezzed && cur->entity_on_hatelist->IsMezzed()) {
 				++iterator;
 				continue;
 			}
@@ -465,6 +475,11 @@ Mob *HateList::GetEntWithMostHateOnList(Mob *center, Mob *skip)
 				continue;
 			}
 
+			if (skip_mezzed && cur->entity_on_hatelist->IsMezzed()) {
+				++iterator;
+				continue;
+			}
+
 			if (cur->entity_on_hatelist != nullptr && ((cur->stored_hate_amount > hate) || cur->is_entity_frenzy))
 			{
 				top_hate = cur->entity_on_hatelist;
@@ -480,7 +495,7 @@ Mob *HateList::GetEntWithMostHateOnList(Mob *center, Mob *skip)
 	return nullptr;
 }
 
-Mob *HateList::GetEntWithMostHateOnList(){
+Mob *HateList::GetEntWithMostHateOnList(bool skip_mezzed){
 	Mob* top = nullptr;
 	int64 hate = -1;
 
@@ -490,8 +505,10 @@ Mob *HateList::GetEntWithMostHateOnList(){
 		struct_HateList *cur = (*iterator);
 		if (cur && cur->entity_on_hatelist != nullptr && (cur->stored_hate_amount > hate))
 		{
-			top = cur->entity_on_hatelist;
-			hate = cur->stored_hate_amount;
+			if (!skip_mezzed || !cur->entity_on_hatelist->IsMezzed()) {
+				top = cur->entity_on_hatelist;
+				hate = cur->stored_hate_amount;
+			}
 		}
 		++iterator;
 	}
@@ -499,26 +516,50 @@ Mob *HateList::GetEntWithMostHateOnList(){
 }
 
 
-Mob *HateList::GetRandomEntOnHateList()
+Mob *HateList::GetRandomEntOnHateList(bool skip_mezzed)
 {
 	int count = list.size();
-	if (count == 0) //If we don't have any entries it'll crash getting a random 0, -1 position.
-		return NULL;
+	if (count <= 0) //If we don't have any entries it'll crash getting a random 0, -1 position.
+		return nullptr;
 
 	if (count == 1) //No need to do all that extra work if we only have one hate entry
 	{
-		if (*list.begin()) // Just in case tHateEntry is invalidated somehow...
+		if (*list.begin() && (!skip_mezzed || !(*list.begin())->entity_on_hatelist->IsMezzed())) // Just in case tHateEntry is invalidated somehow...
 			return (*list.begin())->entity_on_hatelist;
 
-		return NULL;
+		return nullptr;
 	}
 
-	auto iterator = list.begin();
-	int random = zone->random.Int(0, count - 1);
-	for (int i = 0; i < random; i++)
-		++iterator;
+	if (skip_mezzed) {
 
-	return (*iterator)->entity_on_hatelist;
+		for (auto iter : list) {
+			if (iter->entity_on_hatelist->IsMezzed()) {
+				--count;
+			}
+		}
+		if (count <= 0) {
+			return nullptr;
+		}
+	}
+
+	int random = zone->random.Int(0, count - 1);
+	int counter = 0;
+
+	for (auto iter : list) {
+
+		if (skip_mezzed && iter->entity_on_hatelist->IsMezzed()) {
+			continue;
+		}
+		if (counter < random) {
+
+			++counter;
+			continue;
+		}
+
+		return iter->entity_on_hatelist;
+	}
+
+	return nullptr;
 }
 
 Mob *HateList::GetEscapingEntOnHateList() {
@@ -634,10 +675,12 @@ int HateList::AreaRampage(Mob *caster, Mob *target, int count, ExtraAttackOption
 	std::vector<uint16> id_list;
 	for (auto &h : list) {
 		if (h->entity_on_hatelist && h->entity_on_hatelist != caster && h->entity_on_hatelist != target &&
-		    caster->CombatRange(h->entity_on_hatelist))
+			caster->CombatRange(h->entity_on_hatelist, 1.0, true)) {
 			id_list.push_back(h->entity_on_hatelist->GetID());
-		if (count != -1 && id_list.size() > count)
+		}
+		if (count != -1 && id_list.size() > count) {
 			break;
+		}
 	}
 
 	for (auto &id : id_list) {
@@ -647,7 +690,6 @@ int HateList::AreaRampage(Mob *caster, Mob *target, int count, ExtraAttackOption
 			caster->ProcessAttackRounds(mob, opts);
 		}
 	}
-
 	return hit_count;
 }
 
@@ -743,3 +785,15 @@ void HateList::RemoveStaleEntries(int time_ms, float dist)
 	}
 }
 
+std::list<struct_HateList*> HateList::GetHateListByDistance(int distance)
+{
+	std::list<struct_HateList*> hate_list;
+	int squared_distance = (distance * distance);
+	for (auto hate_iterator : list) {
+		auto hate_entry = hate_iterator->entity_on_hatelist;
+		if (distance == 0 || (distance > 0 && DistanceSquaredNoZ(hate_owner->GetPosition(), hate_entry->GetPosition()) <= squared_distance)) {
+			hate_list.push_back(hate_iterator);
+		}
+	}
+	return hate_list;
+}

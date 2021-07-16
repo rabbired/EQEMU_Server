@@ -74,6 +74,13 @@ class EQEmuConfig
 		std::string DatabaseDB;
 		uint16 DatabasePort;
 
+		// From <content_database/>
+		std::string ContentDbHost;
+		std::string ContentDbUsername;
+		std::string ContentDbPassword;
+		std::string ContentDbName;
+		uint16      ContentDbPort;
+
 		// From <qsdatabase> // QueryServ
 		std::string QSDatabaseHost;
 		std::string QSDatabaseUsername;
@@ -165,7 +172,7 @@ class EQEmuConfig
 				fconfig >> _config->_root;
 				_config->parse_config();
 			}
-			catch (std::exception) {
+			catch (std::exception &) {
 				return false;
 			}			
 			return true;

@@ -34,6 +34,7 @@
 #include <stdlib.h>
 #include <string>
 #include <sstream>
+#include <thread>
 
 LoginServer server;
 EQEmuLogSys LogSys;
@@ -43,22 +44,28 @@ void CatchSignal(int sig_num)
 {
 }
 
-int main(int argc, char **argv)
+void LoadDatabaseConnection()
 {
-	RegisterExecutablePlatform(ExePlatformLogin);
-	set_exception_handler();
+	LogInfo("MySQL Database Init");
 
-	LogInfo("Logging System Init");
+	server.db = new Database(
+		server.config.GetVariableString("database", "user", "root"),
+		server.config.GetVariableString("database", "password", ""),
+		server.config.GetVariableString("database", "host", "localhost"),
+		server.config.GetVariableString("database", "port", "3306"),
+		server.config.GetVariableString("database", "db", "peq")
+	);
 
-	if (argc == 1) {
-		LogSys.LoadLogSettingsDefaults();
-	}
+}
 
+void LoadServerConfig()
+{
 	server.config = EQ::JsonConfigFile::Load("login.json");
 	LogInfo("Config System Init");
 
+
 	/**
-	 * options: logging
+	 * Logging
 	 */
 	server.options.Trace(server.config.GetVariableBool("logging", "trace", false));
 	server.options.WorldTrace(server.config.GetVariableBool("logging", "world_trace", false));
@@ -66,7 +73,7 @@ int main(int argc, char **argv)
 	server.options.DumpOutPackets(server.config.GetVariableBool("logging", "dump_packets_out", false));
 
 	/**
-	 * options: worldservers
+	 * Worldservers
 	 */
 	server.options.RejectDuplicateServers(
 		server.config.GetVariableBool(
@@ -77,7 +84,7 @@ int main(int argc, char **argv)
 	server.options.AllowUnregistered(server.config.GetVariableBool("worldservers", "unregistered_allowed", true));
 
 	/**
-	 * options: account
+	 * Account
 	 */
 	server.options.AutoCreateAccounts(server.config.GetVariableBool("account", "auto_create_accounts", true));
 	server.options.AutoLinkAccounts(server.config.GetVariableBool("account", "auto_link_accounts", false));
@@ -92,6 +99,9 @@ int main(int argc, char **argv)
 	);
 #endif
 
+	/**
+	 * Default Loginserver Name (Don't change)
+	 */
 	server.options.DefaultLoginServerName(
 		server.config.GetVariableString(
 			"general",
@@ -99,6 +109,10 @@ int main(int argc, char **argv)
 			"local"
 		)
 	);
+
+	/**
+	 * Security
+	 */
 
 #ifdef ENABLE_SECURITY
 	server.options.EncryptionMode(server.config.GetVariableInt("security", "mode", 13));
@@ -115,23 +129,63 @@ int main(int argc, char **argv)
 			true
 		)
 	);
+}
+
+void start_web_server()
+{
+	int web_api_port = server.config.GetVariableInt("web_api", "port", 6000);
+	LogInfo("Webserver API now listening on port [{0}]", web_api_port);
+
+	httplib::Server api;
+
+	api.set_logger([](const auto& req, const auto& res) {
+		if (!req.path.empty()) {
+			LogInfo("[API] Request [{}] via [{}:{}]", req.path, req.remote_addr, req.remote_port);
+		}
+	});
+
+	LoginserverWebserver::RegisterRoutes(api);
+	api.listen("0.0.0.0", web_api_port);
+}
+
+int main(int argc, char **argv)
+{
+	RegisterExecutablePlatform(ExePlatformLogin);
+	set_exception_handler();
+
+	LogInfo("Logging System Init");
+
+	if (argc == 1) {
+		LogSys.LoadLogSettingsDefaults();
+	}
+
+	/**
+	 * Command handler
+	 */
+	if (argc > 1) {
+		LogSys.SilenceConsoleLogging();
+
+		LoadServerConfig();
+		LoadDatabaseConnection();
+
+		LogSys.LoadLogSettingsDefaults();
+		LogSys.log_settings[Logs::Debug].log_to_console      = static_cast<uint8>(Logs::General);
+		LogSys.log_settings[Logs::Debug].is_category_enabled = 1;
+
+		LoginserverCommandHandler::CommandHandler(argc, argv);
+	}
+
+	LoadServerConfig();
 
 	/**
 	 * mysql connect
 	 */
-	LogInfo("MySQL Database Init");
-
-	server.db = new Database(
-		server.config.GetVariableString("database", "user", "root"),
-		server.config.GetVariableString("database", "password", ""),
-		server.config.GetVariableString("database", "host", "localhost"),
-		server.config.GetVariableString("database", "port", "3306"),
-		server.config.GetVariableString("database", "db", "peq")
-	);
+	LoadDatabaseConnection();
 
 	if (argc == 1) {
-		server.db->LoadLogSettings(LogSys.log_settings);
-		LogSys.StartFileLogs();
+		LogSys.SetDatabase(server.db)
+			->LoadLogDatabaseSettings()
+			->StartFileLogs();
 	}
 
 	/**
@@ -159,7 +213,7 @@ int main(int argc, char **argv)
 	 * create client manager
 	 */
 	LogInfo("Client Manager Init");
-	server.client_manager           = new ClientManager();
+	server.client_manager = new ClientManager();
 	if (!server.client_manager) {
 		LogError("Client Manager Failed to Start");
 		LogInfo("Server Manager Shutdown");
@@ -186,21 +240,10 @@ int main(int argc, char **argv)
 	/**
 	 * Web API
 	 */
-	httplib::Server api;
-	int             web_api_port    = server.config.GetVariableInt("web_api", "port", 6000);
-	bool            web_api_enabled = server.config.GetVariableBool("web_api", "enabled", true);
+	bool web_api_enabled = server.config.GetVariableBool("web_api", "enabled", true);
 	if (web_api_enabled) {
-		api.bind("0.0.0.0", web_api_port);
-		LogInfo("Webserver API now listening on port [{0}]", web_api_port);
-		LoginserverWebserver::RegisterRoutes(api);
-	}
-
-	if (argc > 1) {
-		LogSys.LoadLogSettingsDefaults();
-		LogSys.log_settings[Logs::Debug].log_to_console      = static_cast<uint8>(Logs::General);
-		LogSys.log_settings[Logs::Debug].is_category_enabled = 1;
-
-		LoginserverCommandHandler::CommandHandler(argc, argv);
+		std::thread web_api_thread(start_web_server);
+		web_api_thread.detach();
 	}
 
 	LogInfo("[Config] [Logging] IsTraceOn [{0}]", server.options.IsTraceOn());
@@ -222,10 +265,6 @@ int main(int argc, char **argv)
 		Timer::SetCurrentTime();
 		server.client_manager->Process();
 		EQ::EventLoop::Get().Process();
-
-		if (web_api_enabled) {
-			api.poll();
-		}
 
 		Sleep(5);
 	}

@@ -92,6 +92,8 @@ public:
 	int GetBaseGender();
 	int GetDeity();
 	int GetRace();
+	const char *GetClassName();
+	const char *GetRaceName();
 	int GetGender();
 	int GetTexture();
 	int GetHelmTexture();
@@ -108,6 +110,7 @@ public:
 	int GetClass();
 	int GetLevel();
 	const char *GetCleanName();
+	const char *GetLastName();
 	Lua_Mob GetTarget();
 	void SetTarget(Lua_Mob t);
 	double GetHPRatio();
@@ -124,6 +127,7 @@ public:
 	int SetMana(int mana);
 	double GetManaRatio();
 	int GetAC();
+	int GetDisplayAC();
 	int GetATK();
 	int GetSTR();
 	int GetSTA();
@@ -195,9 +199,13 @@ public:
 	Lua_Mob GetPet();
 	Lua_Mob GetOwner();
 	Lua_HateList GetHateList();
+	Lua_HateList GetShuffledHateList();
+	Lua_HateList GetHateListByDistance();
+	Lua_HateList GetHateListByDistance(int distance);
 	Lua_Mob GetHateTop();
 	Lua_Mob GetHateDamageTop(Lua_Mob other);
 	Lua_Mob GetHateRandom();
+	Lua_Mob GetHateClosest();
 	void AddToHateList(Lua_Mob other);
 	void AddToHateList(Lua_Mob other, int hate);
 	void AddToHateList(Lua_Mob other, int hate, int damage);
@@ -347,6 +355,7 @@ public:
 	void DoKnockback(Lua_Mob caster, uint32 pushback, uint32 pushup);
 	void AddNimbusEffect(int effect_id);
 	void RemoveNimbusEffect(int effect_id);
+	void RemoveAllNimbusEffects();
 	bool IsRunning();
 	void SetRunning(bool running);
 	void SetBodyType(int new_body, bool overwrite_orig);
@@ -422,6 +431,16 @@ public:
 	int GetBodyType();
 	int GetOrigBodyType();
 	void CheckNumHitsRemaining(int type, int32 buff_slot, uint16 spell_id);
+	void DeleteBucket(std::string bucket_name);
+	std::string GetBucket(std::string bucket_name);
+	std::string GetBucketExpires(std::string bucket_name);
+	std::string GetBucketKey();
+	std::string GetBucketRemaining(std::string bucket_name);
+	void SetBucket(std::string bucket_name, std::string bucket_value);
+	void SetBucket(std::string bucket_name, std::string bucket_value, std::string expiration);
+	bool IsHorse();
+	bool CanClassEquipItem(uint32 item_id);
+	bool CanRaceEquipItem(uint32 item_id);
 };
 
 #endif

@@ -378,6 +378,8 @@ const char *GetClassIDName(uint8 class_id, uint8 level)
 			return "Berserker Guildmaster";
 		case MERCHANT:
 			return "Merchant";
+		case DISCORD_MERCHANT:
+			return "Discord Merchant";
 		case ADVENTURERECRUITER:
 			return "Adventure Recruiter";
 		case ADVENTUREMERCHANT:
@@ -388,6 +390,18 @@ const char *GetClassIDName(uint8 class_id, uint8 level)
 			return "Tribute Master";
 		case GUILD_TRIBUTE_MASTER:
 			return "Guild Tribute Master";
+		case GUILD_BANKER:
+			return "Guild Banker";
+		case NORRATHS_KEEPERS_MERCHANT:
+			return "Radiant Crystal Merchant";
+		case DARK_REIGN_MERCHANT:
+			return "Ebon Crystal Merchant";
+		case FELLOWSHIP_MASTER:
+			return "Fellowship Master";
+		case ALT_CURRENCY_MERCHANT:
+			return "Alternate Currency Merchant";
+		case MERCERNARY_MASTER:
+			return "Mercenary Liaison";
 		default:
 			return "Unknown";
 	}
@@ -570,6 +584,20 @@ bool IsNonSpellFighterClass(uint8 class_id)
 			return true;
 		default:
 			return false;
+	}
+}
+
+bool IsHybridClass(uint8 class_id)
+{
+	switch (class_id) {
+	case PALADIN:
+	case RANGER:
+	case SHADOWKNIGHT:
+	case BARD:
+	case BEASTLORD:
+		return true;
+	default:
+		return false;
 	}
 }
 

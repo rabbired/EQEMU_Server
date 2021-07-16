@@ -397,6 +397,30 @@
 9141|2019_07_10_npc_flymode.sql|SHOW COLUMNS FROM `npc_types` LIKE 'flymode'|empty|
 9142|2019_09_02_required_spawn_filter.sql|SHOW COLUMNS FROM `spawnentry` LIKE 'condition_value_filter'|empty|
 9143|2019_09_16_account_table_changes.sql|SHOW COLUMNS FROM `account` LIKE 'ls_id'|empty|
+9144|2019_11_09_logsys_description_update.sql|SELECT * FROM db_version WHERE version >= 9143|empty|
+9145|2019_12_24_banned_ips_update.sql|SHOW TABLES LIKE 'Banned_IPs'|not_empty|
+9146|2020_01_10_character_soft_deletes.sql|SHOW COLUMNS FROM `character_data` LIKE 'deleted_at'|empty|
+9147|2020_01_24_grid_centerpoint_wp.sql|SHOW COLUMNS FROM `grid_entries` LIKE 'centerpoint'|empty|
+9148|2020_01_28_corpse_guild_consent_id.sql|SHOW COLUMNS FROM `character_corpses` LIKE 'guild_consent_id'|empty|
+9149|2020_02_06_globalloot.sql|SHOW COLUMNS FROM `global_loot` LIKE 'hot_zone'|empty|
+9150|2020_02_06_aa_reset_on_death.sql|SHOW COLUMNS FROM `aa_ability` LIKE 'reset_on_death'|empty|
+9151|2020_03_05_npc_always_aggro.sql|SHOW COLUMNS FROM `npc_types` LIKE 'always_aggro'|empty|
+9152|2020_03_09_convert_myisam_to_innodb.sql|SELECT * FROM db_version WHERE version >= 9152|empty|
+9153|2020_05_09_items_subtype.sql|SHOW COLUMNS from `items` LIKE 'UNK219'|not_empty|
+9154|2020_04_11_expansions_content_filters.sql|SHOW COLUMNS from `zone` LIKE 'min_expansion'|empty|
+9155|2020_08_15_lootdrop_level_filtering.sql|SHOW COLUMNS from `lootdrop_entries` LIKE 'trivial_min_level'|empty|
+9156|2020_08_16_virtual_zonepoints.sql|SHOW COLUMNS from `zone_points` LIKE 'is_virtual'|empty|
+9157|2020_09_02_pet_taunting.sql|SHOW COLUMNS from `character_pet_info` LIKE 'taunting'|empty|
+9158|2020_12_09_underworld.sql|SHOW COLUMNS from `zone` LIKE 'underworld_teleport_index'|empty|
+9159|2020_12_22_expedition_system.sql|SELECT * FROM db_version WHERE version >= 9159|empty|
+9160|2021_02_14_npc_exp_mod.sql|SHOW COLUMNS from `npc_types` LIKE 'exp_mod'|empty|
+9161|2021_02_15_npc_spell_entries_unsigned.sql|SELECT * FROM db_version WHERE version >= 9161|empty|
+9162|2021_02_17_server_scheduled_events.sql|SELECT * FROM db_version WHERE version >= 9162|empty|
+9163|2021_04_17_zone_safe_heading_changes.sql|SHOW COLUMNS FROM `zone` LIKE 'safe_heading'|empty|
+9164|2021_04_23_character_exp_modifiers.sql|SHOW TABLES LIKE 'character_exp_modifiers'|empty|
+9165|2021_04_28_idle_pathing.sql|SHOW COLUMNS FROM `spawn2` LIKE 'path_when_zone_idle'|empty|
+9166|2021_02_12_dynamic_zone_members.sql|SHOW TABLES LIKE 'dynamic_zone_members'|empty|
+9167|2021_06_06_beastlord_pets.sql|SHOW TABLES LIKE 'pets_beastlord_data'|empty|
 
 # Upgrade conditions:
 # 	This won't be needed after this system is implemented, but it is used database that are not

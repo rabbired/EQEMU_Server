@@ -87,8 +87,9 @@
 
 bool IsTargetableAESpell(uint16 spell_id)
 {
-	if (IsValidSpell(spell_id) && spells[spell_id].targettype == ST_AETarget)
+	if (IsValidSpell(spell_id) && spells[spell_id].targettype == ST_AETarget) {
 		return true;
+	}
 
 	return false;
 }
@@ -1270,7 +1271,7 @@ bool IsSpellUsableThisZoneType(uint16 spell_id, uint8 zone_type)
 	return false;
 }
 
-const char* GetSpellName(int16 spell_id)
+const char* GetSpellName(uint16 spell_id)
 {
     return spells[spell_id].name;
 }

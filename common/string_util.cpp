@@ -35,7 +35,7 @@
 	#define va_copy(d,s) ((d) = (s))
 #endif
 
-// original source: 
+// original source:
 // https://github.com/facebook/folly/blob/master/folly/String.cpp
 //
 const std::string vStringFormat(const char* format, va_list args)
@@ -74,18 +74,6 @@ const std::string str_tolower(std::string s)
 	return s;
 }
 
-std::vector<std::string> split(std::string str_to_split, char delimiter)
-{
-	std::stringstream        ss(str_to_split);
-	std::string              item;
-	std::vector<std::string> exploded_values;
-	while (std::getline(ss, item, delimiter)) {
-		exploded_values.push_back(item);
-	}
-
-	return exploded_values;
-}
-
 const std::string str_toupper(std::string s)
 {
 	std::transform(
@@ -113,16 +101,32 @@ const std::string StringFormat(const char *format, ...)
 	return output;
 }
 
-std::vector<std::string> SplitString(const std::string &str, char delim) {
+std::vector<std::string> SplitString(const std::string &str, const char delim) {
 	std::vector<std::string> ret;
-	std::stringstream ss(str);
-    std::string item;
-
-    while(std::getline(ss, item, delim)) {
-        ret.push_back(item);
-    }
-
+	std::string::size_type start = 0;
+	auto end = str.find(delim);
+	while (end != std::string::npos) {
+		ret.emplace_back(str, start, end - start);
+		start = end + 1;
+		end = str.find(delim, start);
+	}
+	// this will catch the last word since the string is unlikely to end with a delimiter
+	if (str.length() > start)
+		ret.emplace_back(str, start, str.length() - start);
 	return ret;
+}
+
+std::string::size_type search_deliminated_string(const std::string &haystack, const std::string &needle, const char deliminator)
+{
+	// this shouldn't go out of bounds, even without obvious bounds checks
+	auto pos = haystack.find(needle);
+	while (pos != std::string::npos) {
+		auto c = haystack[pos + needle.length()];
+		if ((c == '\0' || c == deliminator) && (pos == 0 || haystack[pos - 1] == deliminator))
+			return pos;
+		pos = haystack.find(needle, pos + needle.length());
+	}
+	return std::string::npos;
 }
 
 std::string implode(std::string glue, std::vector<std::string> src)
@@ -142,6 +146,23 @@ std::string implode(std::string glue, std::vector<std::string> src)
 	final_output.resize (output.str().size () - glue.size());
 
 	return final_output;
+}
+
+std::vector<std::string> wrap(std::vector<std::string> &src, std::string character)
+{
+	std::vector<std::string> new_vector;
+	new_vector.reserve(src.size());
+
+	for (auto &e: src) {
+		if (e == "null") {
+			new_vector.emplace_back(e);
+			continue;
+		}
+
+		new_vector.emplace_back(character + e + character);
+	}
+
+	return new_vector;
 }
 
 std::string EscapeString(const std::string &s) {
@@ -222,7 +243,7 @@ bool StringIsNumber(const std::string &s) {
 		auto r = stod(s);
 		return true;
 	}
-	catch (std::exception) {
+	catch (std::exception &) {
 		return false;
 	}
 }
@@ -323,54 +344,6 @@ void MakeLowerString(const char *source, char *target) {
 		target++; source++;
 	}
 	*target = 0;
-}
-
-int MakeAnyLenString(char** ret, const char* format, ...) {
-	int buf_len = 128;
-	int chars = -1;
-	va_list argptr, tmpargptr;
-	va_start(argptr, format);
-	while (chars == -1 || chars >= buf_len) {
-		safe_delete_array(*ret);
-		if (chars == -1)
-			buf_len *= 2;
-		else
-			buf_len = chars + 1;
-		*ret = new char[buf_len];
-		va_copy(tmpargptr, argptr);
-		chars = vsnprintf(*ret, buf_len, format, tmpargptr);
-	}
-	va_end(argptr);
-	return chars;
-}
-
-uint32 AppendAnyLenString(char** ret, uint32* bufsize, uint32* strlen, const char* format, ...) {
-	if (*bufsize == 0)
-		*bufsize = 256;
-	if (*ret == 0)
-		*strlen = 0;
-	int chars = -1;
-	char* oldret = 0;
-	va_list argptr, tmpargptr;
-	va_start(argptr, format);
-	while (chars == -1 || chars >= (int32)(*bufsize - *strlen)) {
-		if (chars == -1)
-			*bufsize += 256;
-		else
-			*bufsize += chars + 25;
-		oldret = *ret;
-		*ret = new char[*bufsize];
-		if (oldret) {
-			if (*strlen)
-				memcpy(*ret, oldret, *strlen);
-			safe_delete_array(oldret);
-		}
-		va_copy(tmpargptr, argptr);
-		chars = vsnprintf(&(*ret)[*strlen], (*bufsize - *strlen), format, tmpargptr);
-	}
-	va_end(argptr);
-	*strlen += chars;
-	return *strlen;
 }
 
 uint32 hextoi(const char* num) {
@@ -526,4 +499,64 @@ bool isAlphaNumeric(const char *text)
 	}
 
 	return true;
+}
+
+// Function to convert single digit or two digit number into words
+std::string convert2digit(int n, std::string suffix)
+{
+	// if n is zero
+	if (n == 0) {
+		return "";
+	}
+
+	// split n if it is more than 19
+	if (n > 19) {
+		return NUM_TO_ENGLISH_Y[n / 10] + NUM_TO_ENGLISH_X[n % 10] + suffix;
+	}
+	else {
+		return NUM_TO_ENGLISH_X[n] + suffix;
+	}
+}
+
+// Function to convert a given number (max 9-digits) into words
+std::string numberToWords(unsigned long long int n)
+{
+	// string to store word representation of given number
+	std::string res;
+
+	// this handles digits at ones & tens place
+	res = convert2digit((n % 100), "");
+
+	if (n > 100 && n % 100) {
+		res = "and " + res;
+	}
+
+	// this handles digit at hundreds place
+	res = convert2digit(((n / 100) % 10), "Hundred ") + res;
+
+	// this handles digits at thousands & tens thousands place
+	res = convert2digit(((n / 1000) % 100), "Thousand ") + res;
+
+	// this handles digits at hundred thousands & one millions place
+	res = convert2digit(((n / 100000) % 100), "Lakh, ") + res;
+
+	// this handles digits at ten millions & hundred millions place
+	res = convert2digit((n / 10000000) % 100, "Crore, ") + res;
+
+	// this handles digits at ten millions & hundred millions place
+	res = convert2digit((n / 1000000000) % 100, "Billion, ") + res;
+
+	return res;
+}
+
+// first letter capitalized and rest made lower case
+std::string FormatName(const std::string& char_name)
+{
+	std::string formatted(char_name);
+	if (!formatted.empty())
+	{
+		std::transform(formatted.begin(), formatted.end(), formatted.begin(), ::tolower);
+		formatted[0] = ::toupper(formatted[0]);
+	}
+	return formatted;
 }

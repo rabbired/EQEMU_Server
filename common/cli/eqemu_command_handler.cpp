@@ -39,10 +39,6 @@ namespace EQEmuCommand {
 	{
 		if (cmd[{"-d", "--debug"}]) {
 			std::cout << "Positional args:\n";
-			for (auto &pos_arg : cmd)
-				std::cout << '\t' << pos_arg << std::endl;
-
-			std::cout << "Positional args:\n";
 			for (auto &pos_arg : cmd.pos_args())
 				std::cout << '\t' << pos_arg << std::endl;
 
@@ -73,31 +69,39 @@ namespace EQEmuCommand {
 	{
 		bool arguments_filled = true;
 
+		int index = 2;
 		for (auto &arg : arguments) {
-			if (cmd(arg).str().empty()) {
+			if (cmd(arg).str().empty() && cmd(index).str().empty()) {
 				arguments_filled = false;
 			}
+			index++;
 		}
 
-		if (!arguments_filled || argc == 2) {
+		if (!arguments_filled || argc == 2 || cmd[{"-h", "--help"}]) {
 			std::string arguments_string;
 			for (auto &arg : arguments) {
-				arguments_string += "  " + arg + "=*\n";
+				arguments_string += " " + arg;
 			}
 
 			std::string options_string;
-			for (auto &opt : options) {
+			for (auto   &opt : options) {
 				options_string += "  " + opt + "\n";
 			}
 
-			std::cout << fmt::format(
-				"Command\n\n{0} \n\nArgs\n{1}\nOptions\n{2}",
-				argv[1],
-				arguments_string,
-				options_string
-			) << std::endl;
+			std::stringstream command_string;
 
-			exit(1);
+			command_string <<
+						   termcolor::colorize <<
+						   termcolor::yellow <<
+						   "\nCommand" <<
+						   termcolor::reset << "\n\n" <<
+						   termcolor::green << argv[1] << arguments_string << termcolor::reset << "\n" <<
+						   termcolor::yellow << (!options_string.empty() ? "\nOptions\n\n" : "") <<
+						   termcolor::reset << termcolor::cyan << options_string << termcolor::reset;
+
+			std::cout << command_string.str() << std::endl;
+
+			exit(0);
 		}
 	}
 
@@ -123,10 +127,6 @@ namespace EQEmuCommand {
 		bool        ran_command = false;
 		for (auto   &it: in_function_map) {
 			if (it.first == argv[1]) {
-				std::cout << std::endl;
-				std::cout << "> " << termcolor::cyan << "Executing CLI Command" << termcolor::reset << std::endl;
-				std::cout << std::endl;
-
 				(it.second)(argc, argv, cmd, description);
 				ran_command = true;
 			}
@@ -168,6 +168,11 @@ namespace EQEmuCommand {
 				 * Print section header
 				 */
 				std::string command_prefix = it.first.substr(0, it.first.find(":"));
+
+				if (command_prefix.find("test") != std::string::npos) {
+					continue;
+				}
+
 				if (command_section != command_prefix) {
 					command_section = command_prefix;
 					std::cout << termcolor::reset << command_prefix << std::endl;
@@ -182,12 +187,13 @@ namespace EQEmuCommand {
 			}
 
 			std::cout << std::endl;
-		}
-		else if	(!ran_command) {
-			std::cerr << "Unknown command [" << argv[1] << "] ! Try --help" << std::endl;
+
+			std::exit(0);
 		}
 
-		exit(1);
+		if (ran_command) {
+			std::exit(0);
+		}
 	}
 
 }

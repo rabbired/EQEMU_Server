@@ -24,7 +24,7 @@ void WebInterface::OnCall(uint16 opcode, EQ::Net::Packet &p)
 		std::stringstream ss(json_str);
 		ss >> root;
 	}
-	catch (std::exception) {
+	catch (std::exception &) {
 		SendError("Could not parse request");
 		return;
 	}
@@ -40,7 +40,7 @@ void WebInterface::OnCall(uint16 opcode, EQ::Net::Packet &p)
 			return;
 		}
 	}
-	catch (std::exception) {
+	catch (std::exception &) {
 		SendError("Invalid request: method not supplied");
 		return;
 	}
@@ -49,7 +49,7 @@ void WebInterface::OnCall(uint16 opcode, EQ::Net::Packet &p)
 	try {
 		params = root["params"];
 	}
-	catch (std::exception) {
+	catch (std::exception &) {
 		params = nullptr;
 	}
 	
@@ -57,7 +57,7 @@ void WebInterface::OnCall(uint16 opcode, EQ::Net::Packet &p)
 	try {
 		id = root["id"].asString();
 	}
-	catch (std::exception) {
+	catch (std::exception &) {
 		id = "";
 	}
 
@@ -82,7 +82,7 @@ void WebInterface::Send(const Json::Value &value)
 		p.PutString(0, ss.str());
 		m_connection->Send(ServerOP_WebInterfaceCall, p);
 	}
-	catch (std::exception) {
+	catch (std::exception &) {
 		//Log error
 	}
 }
@@ -116,7 +116,7 @@ void WebInterface::SendEvent(const Json::Value &value)
 		p.PutString(0, ss.str());
 		m_connection->Send(ServerOP_WebInterfaceEvent, p);
 	}
-	catch (std::exception) {
+	catch (std::exception &) {
 		//Log error
 	}
 }
@@ -146,7 +146,7 @@ WebInterfaceList::~WebInterfaceList()
 
 void WebInterfaceList::AddConnection(std::shared_ptr<EQ::Net::ServertalkServerConnection> connection)
 {
-	m_interfaces.insert(std::make_pair(connection->GetUUID(), std::unique_ptr<WebInterface>(new WebInterface(connection))));
+	m_interfaces.insert(std::make_pair(connection->GetUUID(), std::make_unique<WebInterface>(connection)));
 }
 
 void WebInterfaceList::RemoveConnection(std::shared_ptr<EQ::Net::ServertalkServerConnection> connection)

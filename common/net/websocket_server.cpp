@@ -34,8 +34,8 @@ struct EQ::Net::WebsocketServer::Impl
 
 EQ::Net::WebsocketServer::WebsocketServer(const std::string &addr, int port)
 {
-	_impl.reset(new Impl());
-	_impl->server.reset(new EQ::Net::TCPServer());
+	_impl = std::make_unique<Impl>();
+	_impl->server = std::make_unique<EQ::Net::TCPServer>();
 	_impl->server->Listen(addr, port, false, [this](std::shared_ptr<EQ::Net::TCPConnection> connection) {
 		auto wsc = _impl->ws_server.get_connection();
 		WebsocketServerConnection *c = new WebsocketServerConnection(this, connection, wsc);
@@ -53,7 +53,7 @@ EQ::Net::WebsocketServer::WebsocketServer(const std::string &addr, int port)
 		return websocketpp::lib::error_code();
 	});
 
-	_impl->ping_timer.reset(new EQ::Timer(5000, true, [this](EQ::Timer *t) {
+	_impl->ping_timer = std::make_unique<EQ::Timer>(5000, true, [this](EQ::Timer *t) {
 		auto iter = _impl->connections.begin();
 
 		while (iter != _impl->connections.end()) {
@@ -61,13 +61,13 @@ EQ::Net::WebsocketServer::WebsocketServer(const std::string &addr, int port)
 				auto &connection = iter->second;
 				connection->GetWebsocketConnection()->ping("keepalive");
 			}
-			catch (std::exception) {
+			catch (std::exception &) {
 				iter->second->GetTCPConnection()->Disconnect();
 			}
 
 			iter++;
 		}
-	}));
+	});
 
 	_impl->methods.insert(std::make_pair("login", MethodHandlerEntry(std::bind(&WebsocketServer::Login, this, std::placeholders::_1, std::placeholders::_2), 0)));
 	_impl->methods.insert(std::make_pair("subscribe", MethodHandlerEntry(std::bind(&WebsocketServer::Subscribe, this, std::placeholders::_1, std::placeholders::_2), 0)));
@@ -157,7 +157,7 @@ void EQ::Net::WebsocketServer::DispatchEvent(WebsocketSubscriptionEvent evt, Jso
 			}
 		}
 	}
-	catch (std::exception) {
+	catch (std::exception &) {
 	}
 }
 
@@ -190,7 +190,7 @@ Json::Value EQ::Net::WebsocketServer::Login(WebsocketServerConnection *connectio
 
 		return ret;
 	}
-	catch (std::exception) {
+	catch (std::exception &) {
 		throw WebsocketException("Unable to process login request");
 	}
 }
@@ -212,7 +212,7 @@ Json::Value EQ::Net::WebsocketServer::Subscribe(WebsocketServerConnection *conne
 	catch (WebsocketException &ex) {
 		throw ex;
 	}
-	catch (std::exception) {
+	catch (std::exception &) {
 		throw WebsocketException("Unable to process unsubscribe request");
 	}
 }
@@ -234,7 +234,7 @@ Json::Value EQ::Net::WebsocketServer::Unsubscribe(WebsocketServerConnection *con
 	catch (WebsocketException &ex) {
 		throw ex;
 	}
-	catch (std::exception) {
+	catch (std::exception &) {
 		throw WebsocketException("Unable to process unsubscribe request");
 	}
 }

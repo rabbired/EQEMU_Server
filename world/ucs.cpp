@@ -6,29 +6,43 @@
 #include "../common/misc_functions.h"
 #include "../common/md5.h"
 #include "../common/packet_dump.h"
+#include "../common/event/timer.h"
 
 UCSConnection::UCSConnection()
 {
-	Stream = 0;
+	connection = 0;
 }
 
 void UCSConnection::SetConnection(std::shared_ptr<EQ::Net::ServertalkServerConnection> inStream)
 {
-	if (Stream && Stream->Handle())
-	{
+	if (inStream && connection && connection->Handle()) {
 		LogInfo("Incoming UCS Connection while we were already connected to a UCS");
-		Stream->Handle()->Disconnect();
+		connection->Handle()->Disconnect();
 	}
 
-	Stream = inStream;
-	if (Stream) {
-		Stream->OnMessage(std::bind(&UCSConnection::ProcessPacket, this, std::placeholders::_1, std::placeholders::_2));
+	connection = inStream;
+	if (connection) {
+		connection->OnMessage(
+			std::bind(
+				&UCSConnection::ProcessPacket,
+				this,
+				std::placeholders::_1,
+				std::placeholders::_2
+			)
+		);
 	}
+
+	m_keepalive = std::make_unique<EQ::Timer>(1000, true, std::bind(&UCSConnection::OnKeepAlive, this, std::placeholders::_1));
+}
+
+const std::shared_ptr<EQ::Net::ServertalkServerConnection> &UCSConnection::GetConnection() const
+{
+	return connection;
 }
 
 void UCSConnection::ProcessPacket(uint16 opcode, EQ::Net::Packet &p)
 {
-	if (!Stream)
+	if (!connection)
 		return;
 
 	ServerPacket tpack(opcode, p);
@@ -60,10 +74,10 @@ void UCSConnection::ProcessPacket(uint16 opcode, EQ::Net::Packet &p)
 
 void UCSConnection::SendPacket(ServerPacket* pack)
 {
-	if (!Stream)
+	if (!connection)
 		return;
 
-	Stream->SendPacket(pack);
+	connection->SendPacket(pack);
 }
 
 void UCSConnection::SendMessage(const char *From, const char *Message)
@@ -77,4 +91,14 @@ void UCSConnection::SendMessage(const char *From, const char *Message)
 
 	SendPacket(pack);
 	safe_delete(pack);
+}
+
+void UCSConnection::OnKeepAlive(EQ::Timer *t)
+{
+	if (!connection) {
+		return;
+	}
+
+	ServerPacket pack(ServerOP_KeepAlive, 0);
+	connection->SendPacket(&pack);
 }

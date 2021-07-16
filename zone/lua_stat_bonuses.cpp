@@ -1,3 +1,5 @@
+#ifdef LUA_EQEMU
+
 #include "lua.hpp"
 #include <luabind/luabind.hpp>
 
@@ -1160,7 +1162,7 @@ uint32 Lua_StatBonuses::GetMitigateDotRune(int idx) const {
 
 uint32 Lua_StatBonuses::GetManaAbsorbPercentDamage(int idx) const {
 	Lua_Safe_Call_Int();
-	return self->ManaAbsorbPercentDamage[idx];
+	return self->ManaAbsorbPercentDamage;
 }
 
 int32 Lua_StatBonuses::GetImprovedTaunt(int idx) const {
@@ -1543,3 +1545,5 @@ luabind::scope lua_register_stat_bonuses() {
 		.def("AssassinateLevel", &Lua_StatBonuses::GetAssassinateLevel)
 		.def("ReduceTradeskillFail", &Lua_StatBonuses::GetReduceTradeskillFail);
 }
+
+#endif

@@ -23,7 +23,9 @@
 #include "mob.h"
 #include "qglobals.h"
 #include "zonedb.h"
+#include "zone_store.h"
 #include "zonedump.h"
+#include "../common/loottable.h"
 
 #include <deque>
 #include <list>
@@ -95,7 +97,7 @@ class Raid;
 class Spawn2;
 class Aura;
 
-namespace EQEmu
+namespace EQ
 {
 	struct ItemData;
 }
@@ -112,12 +114,13 @@ public:
 	virtual ~NPC();
 
 	static NPC *SpawnNodeNPC(std::string name, std::string last_name, const glm::vec4 &position);
-	static NPC *SpawnGridNodeNPC(std::string name, const glm::vec4 &position, uint32 grid_id, uint32 grid_number, uint32 pause);
+	static void SpawnGridNodeNPC(const glm::vec4 &position, int32 grid_id, int32 grid_number, int32 zoffset);
+	static void SpawnZonePointNodeNPC(std::string name, const glm::vec4 &position);
 
 	//abstract virtual function implementations requird by base abstract class
-	virtual bool Death(Mob* killerMob, int32 damage, uint16 spell_id, EQEmu::skills::SkillType attack_skill);
-	virtual void Damage(Mob* from, int32 damage, uint16 spell_id, EQEmu::skills::SkillType attack_skill, bool avoidable = true, int8 buffslot = -1, bool iBuffTic = false, eSpecialAttacks special = eSpecialAttacks::None);
-	virtual bool Attack(Mob* other, int Hand = EQEmu::invslot::slotPrimary, bool FromRiposte = false, bool IsStrikethrough = false,
+	virtual bool Death(Mob* killerMob, int32 damage, uint16 spell_id, EQ::skills::SkillType attack_skill);
+	virtual void Damage(Mob* from, int32 damage, uint16 spell_id, EQ::skills::SkillType attack_skill, bool avoidable = true, int8 buffslot = -1, bool iBuffTic = false, eSpecialAttacks special = eSpecialAttacks::None);
+	virtual bool Attack(Mob* other, int Hand = EQ::invslot::slotPrimary, bool FromRiposte = false, bool IsStrikethrough = false,
 		bool IsFromSpell = false, ExtraAttackOptions *opts = nullptr);
 	virtual bool HasRaid() { return false; }
 	virtual bool HasGroup() { return false; }
@@ -143,10 +146,13 @@ public:
 	virtual bool	AI_IdleCastCheck();
 	virtual void	AI_Event_SpellCastFinished(bool iCastSucceeded, uint16 slot);
 
+	bool AICheckCloseBeneficialSpells(NPC* caster, uint8 chance, float cast_range, uint32 spell_types);
+	void AIYellForHelp(Mob* sender, Mob* attacker);
+
 	void LevelScale();
 
 	virtual void SetTarget(Mob* mob);
-	virtual uint16 GetSkill(EQEmu::skills::SkillType skill_num) const { if (skill_num <= EQEmu::skills::HIGHEST_SKILL) { return skills[skill_num]; } return 0; }
+	virtual uint16 GetSkill(EQ::skills::SkillType skill_num) const { if (skill_num <= EQ::skills::HIGHEST_SKILL) { return skills[skill_num]; } return 0; }
 
 	void CalcItemBonuses(StatBonuses *newbon);
 	virtual void CalcBonuses();
@@ -165,15 +171,16 @@ public:
 	virtual void	RangedAttack(Mob* other);
 	virtual void	ThrowingAttack(Mob* other) { }
 	int32 GetNumberOfAttacks() const { return attack_count; }
-	void DoRangedAttackDmg(Mob* other, bool Launch = true, int16 damage_mod = 0, int16 chance_mod = 0, EQEmu::skills::SkillType skill = EQEmu::skills::SkillArchery, float speed = 4.0f, const char *IDFile = nullptr);
+	void DoRangedAttackDmg(Mob* other, bool Launch = true, int16 damage_mod = 0, int16 chance_mod = 0, EQ::skills::SkillType skill = EQ::skills::SkillArchery, float speed = 4.0f, const char *IDFile = nullptr);
 
 	bool	DatabaseCastAccepted(int spell_id);
 	bool	IsFactionListAlly(uint32 other_faction);
+	bool	IsGuard();
 	FACTION_VALUE CheckNPCFactionAlly(int32 other_faction);
 	virtual FACTION_VALUE GetReverseFactionCon(Mob* iOther);
 
-	void	GoToBind(uint8 bindnum = 0)	{ GMMove(m_SpawnPoint.x, m_SpawnPoint.y, m_SpawnPoint.z, m_SpawnPoint.w); }
-	void	Gate(uint8 bindnum = 0);
+	void	GoToBind(uint8 bind_number = 0)	{ GMMove(m_SpawnPoint.x, m_SpawnPoint.y, m_SpawnPoint.z, m_SpawnPoint.w); }
+	void	Gate(uint8 bind_number = 0);
 
 	void	GetPetState(SpellBuff_Struct *buffs, uint32 *items, char *name);
 	void	SetPetState(SpellBuff_Struct *buffs, uint32 *items);
@@ -182,15 +189,16 @@ public:
 	virtual void SpellProcess();
 	virtual void FillSpawnStruct(NewSpawn_Struct* ns, Mob* ForWho);
 
-	void	AddItem(const EQEmu::ItemData* item, uint16 charges, bool equipitem = true);
+	void	AddItem(const EQ::ItemData* item, uint16 charges, bool equipitem = true);
 	void	AddItem(uint32 itemid, uint16 charges, bool equipitem = true, uint32 aug1 = 0, uint32 aug2 = 0, uint32 aug3 = 0, uint32 aug4 = 0, uint32 aug5 = 0, uint32 aug6 = 0);
 	void	AddLootTable();
 	void	AddLootTable(uint32 ldid);
 	void	CheckGlobalLootTables();
 	void	DescribeAggro(Client *towho, Mob *mob, bool verbose);
 	void	RemoveItem(uint32 item_id, uint16 quantity = 0, uint16 slot = 0);
-	void	CheckMinMaxLevel(Mob *them);
+	void	CheckTrivialMinMaxLevelDrop(Mob *killer);
 	void	ClearItemList();
+	inline const ItemList &GetItemList() { return itemlist; }
 	ServerLootItem_Struct*	GetItem(int slot_id);
 	void	AddCash(uint16 in_copper, uint16 in_silver, uint16 in_gold, uint16 in_platinum);
 	void	AddCash();
@@ -266,7 +274,7 @@ public:
 	void SetNPCFactionID(int32 in)
 	{
 		npc_faction_id = in;
-		database.GetFactionIdsForNPC(npc_faction_id, &faction_list, &primary_faction);
+		content_db.GetFactionIdsForNPC(npc_faction_id, &faction_list, &primary_faction);
 	}
 
     glm::vec4 m_SpawnPoint;
@@ -287,7 +295,22 @@ public:
 	void	PickPocket(Client* thief);
 	void	Disarm(Client* client, int chance);
 	void	StartSwarmTimer(uint32 duration) { swarm_timer.Start(duration); }
-	void	AddLootDrop(const EQEmu::ItemData*dbitem, ItemList* itemlistconst, int16 charges, uint8 minlevel, uint8 maxlevel, bool equipit, bool wearchange = false, uint32 aug1 = 0, uint32 aug2 = 0, uint32 aug3 = 0, uint32 aug4 = 0, uint32 aug5 = 0, uint32 aug6 = 0);
+
+	void AddLootDrop(
+		const EQ::ItemData *item2,
+		ItemList *itemlist,
+		LootDropEntries_Struct loot_drop,
+		bool wear_change = false,
+		uint32 aug1 = 0,
+		uint32 aug2 = 0,
+		uint32 aug3 = 0,
+		uint32 aug4 = 0,
+		uint32 aug5 = 0,
+		uint32 aug6 = 0
+	);
+
+	bool MeetsLootDropLevelRequirements(LootDropEntries_Struct loot_drop);
+
 	virtual void DoClassAttacks(Mob *target);
 	void	CheckSignal();
 	inline bool IsNotTargetableWithHotkey() const { return no_target_hotkey; }
@@ -300,7 +323,7 @@ public:
 	int					GetMaxWp() const { return max_wp; }
 	void				DisplayWaypointInfo(Client *to);
 	void				CalculateNewWaypoint();
-	void				AssignWaypoints(int32 grid);
+	void				AssignWaypoints(int32 grid_id, int start_wp = 0);
 	void				SetWaypointPause();
 	void				UpdateWaypoint(int wp_index);
 
@@ -309,7 +332,8 @@ public:
 	void				ResumeWandering();
 	void				PauseWandering(int pausetime);
 	void				MoveTo(const glm::vec4& position, bool saveguardspot);
-	void				GetClosestWaypoint(std::list<wplist> &wp_list, int count, const glm::vec3& location);
+	void				GetClosestWaypoints(std::list<wplist> &wp_list, int count, const glm::vec3& location);
+	int					GetClosestWaypoint(const glm::vec3& location);
 
 	uint32				GetEquippedItemFromTextureSlot(uint8 material_slot) const;	// returns item id
 	int32				GetEquipmentMaterial(uint8 material_slot) const;
@@ -400,10 +424,12 @@ public:
 	void SetCombatEvent(bool b) { combat_event = b; }
 
 	/* Only allows players that killed corpse to loot */
-	const bool HasPrivateCorpse() const { return NPCTypedata->private_corpse; }
+	const bool HasPrivateCorpse() const { return NPCTypedata_ours ? NPCTypedata_ours->private_corpse : NPCTypedata->private_corpse; }
 
-	virtual const bool IsUnderwaterOnly() const { return NPCTypedata->underwater; }
-	const char* GetRawNPCTypeName() const { return NPCTypedata->name; }
+	virtual const bool IsUnderwaterOnly() const { return NPCTypedata_ours ? NPCTypedata_ours->underwater : NPCTypedata->underwater; }
+	const char* GetRawNPCTypeName() const { return NPCTypedata_ours ? NPCTypedata_ours->name : NPCTypedata->name; }
+
+	virtual int GetKillExpMod() const { return NPCTypedata_ours ? NPCTypedata_ours->exp_mod : NPCTypedata->exp_mod; }
 
 	void ChangeLastName(const char* in_lastname);
 	void ClearLastName();
@@ -413,9 +439,9 @@ public:
 	void NPCSlotTexture(uint8 slot, uint16 texture);	// Sets new material values for slots
 
 	uint32 GetAdventureTemplate() const { return adventure_template_id; }
-	void AddSpellToNPCList(int16 iPriority, int16 iSpellID, uint32 iType, int16 iManaCost, int32 iRecastDelay, int16 iResistAdjust, int8 min_hp, int8 max_hp);
+	void AddSpellToNPCList(int16 iPriority, uint16 iSpellID, uint32 iType, int16 iManaCost, int32 iRecastDelay, int16 iResistAdjust, int8 min_hp, int8 max_hp);
 	void AddSpellEffectToNPCList(uint16 iSpellEffectID, int32 base, int32 limit, int32 max);
-	void RemoveSpellFromNPCList(int16 spell_id);
+	void RemoveSpellFromNPCList(uint16 spell_id);
 	Timer *GetRefaceTimer() const { return reface_timer; }
 	const uint32 GetAltCurrencyType() const { return NPCTypedata->alt_currency_type; }
 
@@ -439,7 +465,7 @@ public:
 	uint32	GetSpawnKillCount();
 	int	GetScore();
 	void	mod_prespawn(Spawn2 *sp);
-	int	mod_npc_damage(int damage, EQEmu::skills::SkillType skillinuse, int hand, const EQEmu::ItemData* weapon, Mob* other);
+	int	mod_npc_damage(int damage, EQ::skills::SkillType skillinuse, int hand, const EQ::ItemData* weapon, Mob* other);
 	void	mod_npc_killed_merit(Mob* c);
 	void	mod_npc_killed(Mob* oos);
 	void	AISpellsList(Client *c);
@@ -472,6 +498,11 @@ public:
 
 	inline bool IsSkipAutoScale() const { return skip_auto_scale; }
 
+	void ScaleNPC(uint8 npc_level);
+
+	void RecalculateSkills();
+
+	static LootDropEntries_Struct NewLootDropEntry();
 protected:
 
 	const NPCType*	NPCTypedata;
@@ -493,6 +524,7 @@ protected:
 
 	Timer	attacked_timer;		//running while we are being attacked (damaged)
 	Timer	swarm_timer;
+	Timer	monkattack_timer;	//additional timer for tiger claw usage
 	Timer	classattack_timer;
 	Timer	knightattack_timer;
 	Timer	assist_timer;		//ask for help from nearby mobs
@@ -505,7 +537,7 @@ protected:
 
 	uint32	npc_spells_id;
 	uint8	casting_spell_AIindex;
-	
+
 	uint32*	pDontCastBefore_casting_spell;
 	std::vector<AISpells_Struct> AIspells;
 	bool HasAISpell;
@@ -580,9 +612,9 @@ protected:
 	uint32 roambox_delay;
 	uint32 roambox_min_delay;
 
-	uint16	skills[EQEmu::skills::HIGHEST_SKILL + 1];
+	uint16	skills[EQ::skills::HIGHEST_SKILL + 1];
 
-	uint32	equipment[EQEmu::invslot::EQUIPMENT_COUNT];	//this is an array of item IDs
+	uint32	equipment[EQ::invslot::EQUIPMENT_COUNT];	//this is an array of item IDs
 
 	uint32	herosforgemodel;			//this is the Hero Forge Armor Model (i.e 63 or 84 or 203)
 	uint16	d_melee_texture1;
@@ -612,12 +644,11 @@ protected:
 	bool ignore_despawn; //NPCs with this set to 1 will ignore the despawn value in spawngroup
 
 
-
 private:
-	uint32	loottable_id;
-	bool	skip_global_loot;
-	bool	skip_auto_scale;
-	bool	p_depop;
+	uint32 loottable_id;
+	bool   skip_global_loot;
+	bool   skip_auto_scale;
+	bool   p_depop;
 };
 
 #endif

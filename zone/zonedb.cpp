@@ -11,7 +11,9 @@
 #include "merc.h"
 #include "zone.h"
 #include "zonedb.h"
+#include "zone_store.h"
 #include "aura.h"
+#include "../common/repositories/criteria/content_filter_criteria.h"
 
 #include <ctime>
 #include <iostream>
@@ -20,6 +22,7 @@
 extern Zone* zone;
 
 ZoneDatabase database;
+ZoneDatabase content_db;
 
 ZoneDatabase::ZoneDatabase()
 : SharedDatabase()
@@ -82,19 +85,19 @@ bool ZoneDatabase::SaveZoneCFG(uint32 zoneid, uint16 instance_id, NewZone_Struct
 }
 
 bool ZoneDatabase::GetZoneCFG(
-	uint32 zoneid, 
-	uint16 instance_id, 
-	NewZone_Struct *zone_data, 
-	bool &can_bind, 
-	bool &can_combat, 
-	bool &can_levitate, 
-	bool &can_castoutdoor, 
-	bool &is_city, 
-	bool &is_hotzone, 
-	bool &allow_mercs, 
+	uint32 zoneid,
+	uint16 instance_id,
+	NewZone_Struct *zone_data,
+	bool &can_bind,
+	bool &can_combat,
+	bool &can_levitate,
+	bool &can_castoutdoor,
+	bool &is_city,
+	bool &is_hotzone,
+	bool &allow_mercs,
 	double &max_movement_update_range,
-	uint8 &zone_type, 
-	int &ruleset, 
+	uint8 &zone_type,
+	int &ruleset,
 	char **map_filename) {
 
 	*map_filename = new char[100];
@@ -102,70 +105,74 @@ bool ZoneDatabase::GetZoneCFG(
 
 	std::string query = StringFormat(
 		"SELECT "
-		"ztype, "					 // 0
-		"fog_red, "					 // 1
-		"fog_green, "				 // 2
-		"fog_blue, "				 // 3
-		"fog_minclip, "				 // 4
-		"fog_maxclip, "				 // 5
-		"fog_red2, "				 // 6
-		"fog_green2, "				 // 7
-		"fog_blue2, "				 // 8
-		"fog_minclip2, "			 // 9
-		"fog_maxclip2, "			 // 10
-		"fog_red3, "				 // 11
-		"fog_green3, "				 // 12
-		"fog_blue3, "				 // 13
-		"fog_minclip3, "			 // 14
-		"fog_maxclip3, "			 // 15
-		"fog_red4, "				 // 16
-		"fog_green4, "				 // 17
-		"fog_blue4, "				 // 18
-		"fog_minclip4, "			 // 19
-		"fog_maxclip4, "			 // 20
-		"fog_density, "				 // 21
-		"sky, "						 // 22
-		"zone_exp_multiplier, "		 // 23
-		"safe_x, "					 // 24
-		"safe_y, "					 // 25
-		"safe_z, "					 // 26
-		"underworld, "				 // 27
-		"minclip, "					 // 28
-		"maxclip, "					 // 29
-		"time_type, "				 // 30
-		"canbind, "					 // 31
-		"cancombat, "				 // 32
-		"canlevitate, "				 // 33
-		"castoutdoor, "				 // 34
-		"hotzone, "					 // 35
-		"ruleset, "					 // 36
-		"suspendbuffs, "			 // 37
-		"map_file_name, "			 // 38
-		"short_name, "				 // 39
-		"rain_chance1, "			 // 40
-		"rain_chance2, "			 // 41
-		"rain_chance3, "			 // 42
-		"rain_chance4, "			 // 43
-		"rain_duration1, "			 // 44
-		"rain_duration2, "			 // 45
-		"rain_duration3, "			 // 46
-		"rain_duration4, "			 // 47
-		"snow_chance1, "			 // 48
-		"snow_chance2, "			 // 49
-		"snow_chance3, "			 // 50
-		"snow_chance4, "			 // 51
-		"snow_duration1, "			 // 52
-		"snow_duration2, "			 // 53
-		"snow_duration3, "			 // 54
-		"snow_duration4, "			 // 55
-		"gravity, "					 // 56
-		"fast_regen_hp, "			 // 57
-		"fast_regen_mana, "			 // 58
-		"fast_regen_endurance, "	 // 59
-		"npc_max_aggro_dist, "		 // 60
-		"max_movement_update_range " // 61
-		"FROM zone WHERE zoneidnumber = %i AND version = %i",
-		zoneid, instance_id);
+		"ztype, "						// 0
+		"fog_red, "						// 1
+		"fog_green, "					// 2
+		"fog_blue, "					// 3
+		"fog_minclip, "					// 4
+		"fog_maxclip, "					// 5
+		"fog_red2, "					// 6
+		"fog_green2, "					// 7
+		"fog_blue2, "					// 8
+		"fog_minclip2, "				// 9
+		"fog_maxclip2, "				// 10
+		"fog_red3, "					// 11
+		"fog_green3, "					// 12
+		"fog_blue3, "					// 13
+		"fog_minclip3, "				// 14
+		"fog_maxclip3, "				// 15
+		"fog_red4, "					// 16
+		"fog_green4, "					// 17
+		"fog_blue4, "					// 18
+		"fog_minclip4, "				// 19
+		"fog_maxclip4, "				// 20
+		"fog_density, "					// 21
+		"sky, "							// 22
+		"zone_exp_multiplier, "			// 23
+		"safe_x, "						// 24
+		"safe_y, "						// 25
+		"safe_z, "						// 26
+		"underworld, "					// 27
+		"minclip, "						// 28
+		"maxclip, "						// 29
+		"time_type, "					// 30
+		"canbind, "						// 31
+		"cancombat, "					// 32
+		"canlevitate, "					// 33
+		"castoutdoor, "					// 34
+		"hotzone, "						// 35
+		"ruleset, "						// 36
+		"suspendbuffs, "				// 37
+		"map_file_name, "				// 38
+		"short_name, "					// 39
+		"rain_chance1, "				// 40
+		"rain_chance2, "				// 41
+		"rain_chance3, "				// 42
+		"rain_chance4, "				// 43
+		"rain_duration1, "				// 44
+		"rain_duration2, "				// 45
+		"rain_duration3, "				// 46
+		"rain_duration4, "				// 47
+		"snow_chance1, "				// 48
+		"snow_chance2, "				// 49
+		"snow_chance3, "				// 50
+		"snow_chance4, "				// 51
+		"snow_duration1, "				// 52
+		"snow_duration2, "				// 53
+		"snow_duration3, "				// 54
+		"snow_duration4, "				// 55
+		"gravity, "						// 56
+		"fast_regen_hp, "				// 57
+		"fast_regen_mana, "				// 58
+		"fast_regen_endurance, "		// 59
+		"npc_max_aggro_dist, "			// 60
+		"max_movement_update_range, "	// 61
+		"underworld_teleport_index "	// 62
+		"FROM zone WHERE zoneidnumber = %i AND version = %i %s",
+		zoneid,
+		instance_id,
+		ContentFilterCriteria::apply().c_str()
+	);
 	auto results = QueryDatabase(query);
 	if (!results.Success()) {
 		strcpy(*map_filename, "default");
@@ -212,6 +219,7 @@ bool ZoneDatabase::GetZoneCFG(
 	zone_data->FastRegenMana = atoi(row[58]);
 	zone_data->FastRegenEndurance = atoi(row[59]);
 	zone_data->NPCAggroMaxDist = atoi(row[60]);
+	zone_data->underworld_teleport_index = atoi(row[62]);
 
 	int bindable = 0;
 	bindable = atoi(row[31]);
@@ -360,7 +368,7 @@ void ZoneDatabase::RegisterBug(BugReport_Struct* bug_report) {
 	char* type_ = nullptr;
 	char* target_ = nullptr;
 	char* bug_ = nullptr;
-	
+
 	len = strlen(bug_report->reporter_name);
 	if (len) {
 		if (len > 63) // check against db column size
@@ -426,7 +434,7 @@ void ZoneDatabase::RegisterBug(BugReport_Struct* bug_report) {
 	safe_delete_array(type_);
 	safe_delete_array(target_);
 	safe_delete_array(bug_);
-	
+
 	QueryDatabase(query);
 }
 
@@ -553,7 +561,7 @@ void ZoneDatabase::RegisterBug(Client* client, BugReport_Struct* bug_report) {
 		" '%s')",
 		zone->GetShortName(),
 		client->ClientVersion(),
-		EQEmu::versions::ClientVersionName(client->ClientVersion()),
+		EQ::versions::ClientVersionName(client->ClientVersion()),
 		client->AccountID(),
 		client->CharacterID(),
 		client->GetName(),
@@ -570,11 +578,11 @@ void ZoneDatabase::RegisterBug(Client* client, BugReport_Struct* bug_report) {
 		bug_report->target_id,
 		(target_name_ ? target_name_ : ""),
 		bug_report->optional_info_mask,
-		((bug_report->optional_info_mask & EQEmu::bug::infoCanDuplicate) != 0 ? 1 : 0),
-		((bug_report->optional_info_mask & EQEmu::bug::infoCrashBug) != 0 ? 1 : 0),
-		((bug_report->optional_info_mask & EQEmu::bug::infoTargetInfo) != 0 ? 1 : 0),
-		((bug_report->optional_info_mask & EQEmu::bug::infoCharacterFlags) != 0 ? 1 : 0),
-		((bug_report->optional_info_mask & EQEmu::bug::infoUnknownValue) != 0 ? 1 : 0),
+		((bug_report->optional_info_mask & EQ::bug::infoCanDuplicate) != 0 ? 1 : 0),
+		((bug_report->optional_info_mask & EQ::bug::infoCrashBug) != 0 ? 1 : 0),
+		((bug_report->optional_info_mask & EQ::bug::infoTargetInfo) != 0 ? 1 : 0),
+		((bug_report->optional_info_mask & EQ::bug::infoCharacterFlags) != 0 ? 1 : 0),
+		((bug_report->optional_info_mask & EQ::bug::infoUnknownValue) != 0 ? 1 : 0),
 		(bug_report_ ? bug_report_ : ""),
 		(system_info_ ? system_info_ : "")
 	);
@@ -584,7 +592,7 @@ void ZoneDatabase::RegisterBug(Client* client, BugReport_Struct* bug_report) {
 	safe_delete_array(target_name_);
 	safe_delete_array(bug_report_);
 	safe_delete_array(system_info_);
-	
+
 	auto result = QueryDatabase(query);
 
 	// TODO: Entity dumping [RuleB(Bugs, DumpTargetEntity)]
@@ -631,55 +639,8 @@ void ZoneDatabase::SetDoorPlace(uint8 value,uint8 door_id,const char* zone_name)
 	door_isopen_array[door_id] = value;
 }
 
-void ZoneDatabase::GetEventLogs(const char* name,char* target,uint32 account_id,uint8 eventid,char* detail,char* timestamp, CharacterEventLog_Struct* cel)
-{
-	char modifications[200];
-	if(strlen(name) != 0)
-		sprintf(modifications,"charname=\'%s\'",name);
-	else if(account_id != 0)
-		sprintf(modifications,"accountid=%i",account_id);
-
-	if(strlen(target) != 0)
-		sprintf(modifications,"%s AND target LIKE \'%%%s%%\'",modifications,target);
-
-	if(strlen(detail) != 0)
-		sprintf(modifications,"%s AND description LIKE \'%%%s%%\'",modifications,detail);
-
-	if(strlen(timestamp) != 0)
-		sprintf(modifications,"%s AND time LIKE \'%%%s%%\'",modifications,timestamp);
-
-	if(eventid == 0)
-		eventid =1;
-	sprintf(modifications,"%s AND event_nid=%i",modifications,eventid);
-
-    std::string query = StringFormat("SELECT id, accountname, accountid, status, charname, target, "
-                                    "time, descriptiontype, description FROM eventlog WHERE %s", modifications);
-    auto results = QueryDatabase(query);
-    if (!results.Success())
-        return;
-
-	int index = 0;
-    for (auto row = results.begin(); row != results.end(); ++row, ++index) {
-        if(index == 255)
-            break;
-
-        cel->eld[index].id = atoi(row[0]);
-        strn0cpy(cel->eld[index].accountname,row[1],64);
-        cel->eld[index].account_id = atoi(row[2]);
-        cel->eld[index].status = atoi(row[3]);
-        strn0cpy(cel->eld[index].charactername,row[4],64);
-        strn0cpy(cel->eld[index].targetname,row[5],64);
-        sprintf(cel->eld[index].timestamp,"%s",row[6]);
-        strn0cpy(cel->eld[index].descriptiontype,row[7],64);
-        strn0cpy(cel->eld[index].details,row[8],128);
-        cel->eventid = eventid;
-        cel->count = index + 1;
-    }
-
-}
-
 // Load child objects for a world container (i.e., forge, bag dropped to ground, etc)
-void ZoneDatabase::LoadWorldContainer(uint32 parentid, EQEmu::ItemInstance* container)
+void ZoneDatabase::LoadWorldContainer(uint32 parentid, EQ::ItemInstance* container)
 {
 	if (!container) {
 		LogError("Programming error: LoadWorldContainer passed nullptr pointer");
@@ -701,7 +662,7 @@ void ZoneDatabase::LoadWorldContainer(uint32 parentid, EQEmu::ItemInstance* cont
         uint8 index = (uint8)atoi(row[0]);
         uint32 item_id = (uint32)atoi(row[1]);
         int8 charges = (int8)atoi(row[2]);
-		uint32 aug[EQEmu::invaug::SOCKET_COUNT];
+		uint32 aug[EQ::invaug::SOCKET_COUNT];
         aug[0] = (uint32)atoi(row[3]);
         aug[1] = (uint32)atoi(row[4]);
         aug[2] = (uint32)atoi(row[5]);
@@ -709,9 +670,9 @@ void ZoneDatabase::LoadWorldContainer(uint32 parentid, EQEmu::ItemInstance* cont
         aug[4] = (uint32)atoi(row[7]);
 		aug[5] = (uint32)atoi(row[8]);
 
-        EQEmu::ItemInstance* inst = database.CreateItem(item_id, charges);
+        EQ::ItemInstance* inst = database.CreateItem(item_id, charges);
 		if (inst && inst->GetItem()->IsClassCommon()) {
-			for (int i = EQEmu::invaug::SOCKET_BEGIN; i <= EQEmu::invaug::SOCKET_END; i++)
+			for (int i = EQ::invaug::SOCKET_BEGIN; i <= EQ::invaug::SOCKET_END; i++)
                 if (aug[i])
                     inst->PutAugment(&database, i, aug[i]);
             // Put item inside world container
@@ -723,7 +684,7 @@ void ZoneDatabase::LoadWorldContainer(uint32 parentid, EQEmu::ItemInstance* cont
 }
 
 // Save child objects for a world container (i.e., forge, bag dropped to ground, etc)
-void ZoneDatabase::SaveWorldContainer(uint32 zone_id, uint32 parent_id, const EQEmu::ItemInstance* container)
+void ZoneDatabase::SaveWorldContainer(uint32 zone_id, uint32 parent_id, const EQ::ItemInstance* container)
 {
 	// Since state is not saved for each world container action, we'll just delete
 	// all and save from scratch .. we may come back later to optimize
@@ -734,43 +695,53 @@ void ZoneDatabase::SaveWorldContainer(uint32 zone_id, uint32 parent_id, const EQ
 	DeleteWorldContainer(parent_id,zone_id);
 
 	// Save all 10 items, if they exist
-	for (uint8 index = EQEmu::invbag::SLOT_BEGIN; index <= EQEmu::invbag::SLOT_END; index++) {
+	for (uint8 index = EQ::invbag::SLOT_BEGIN; index <= EQ::invbag::SLOT_END; index++) {
 
-		EQEmu::ItemInstance* inst = container->GetItem(index);
+		EQ::ItemInstance* inst = container->GetItem(index);
 		if (!inst)
             continue;
 
         uint32 item_id = inst->GetItem()->ID;
-		uint32 augslot[EQEmu::invaug::SOCKET_COUNT] = { 0, 0, 0, 0, 0, 0 };
+		uint32 augslot[EQ::invaug::SOCKET_COUNT] = { 0, 0, 0, 0, 0, 0 };
 
-		if (inst->IsType(EQEmu::item::ItemClassCommon)) {
-			for (int i = EQEmu::invaug::SOCKET_BEGIN; i <= EQEmu::invaug::SOCKET_END; i++) {
-                EQEmu::ItemInstance *auginst=inst->GetAugment(i);
+		if (inst->IsType(EQ::item::ItemClassCommon)) {
+			for (int i = EQ::invaug::SOCKET_BEGIN; i <= EQ::invaug::SOCKET_END; i++) {
+                EQ::ItemInstance *auginst=inst->GetAugment(i);
                 augslot[i]=(auginst && auginst->GetItem()) ? auginst->GetItem()->ID : 0;
             }
         }
 
-        std::string query = StringFormat("REPLACE INTO object_contents "
-                                        "(zoneid, parentid, bagidx, itemid, charges, "
-                                        "augslot1, augslot2, augslot3, augslot4, augslot5, augslot6, droptime) "
-                                        "VALUES (%i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, now())",
-                                        zone_id, parent_id, index, item_id, inst->GetCharges(),
-										augslot[0], augslot[1], augslot[2], augslot[3], augslot[4], augslot[5]);
-        auto results = QueryDatabase(query);
-        if (!results.Success())
-      LogError("Error in ZoneDatabase::SaveWorldContainer: [{}]", results.ErrorMessage().c_str());
+		std::string query   = StringFormat(
+			"REPLACE INTO object_contents "
+			"(zoneid, parentid, bagidx, itemid, charges, "
+			"augslot1, augslot2, augslot3, augslot4, augslot5, augslot6, droptime) "
+			"VALUES (%i, %i, %i, %i, %i, %i, %i, %i, %i, %i, %i, now())",
+			zone_id, parent_id, index, item_id, inst->GetCharges(),
+			augslot[0], augslot[1], augslot[2], augslot[3], augslot[4], augslot[5]
+		);
 
-    }
+		auto results = database.QueryDatabase(query);
+		if (!results.Success()) {
+			LogError("Error in ZoneDatabase::SaveWorldContainer: [{}]", results.ErrorMessage().c_str());
+		}
+
+	}
 
 }
 
 // Remove all child objects inside a world container (i.e., forge, bag dropped to ground, etc)
 void ZoneDatabase::DeleteWorldContainer(uint32 parent_id, uint32 zone_id)
 {
-	std::string query = StringFormat("DELETE FROM object_contents WHERE parentid = %i AND zoneid = %i", parent_id, zone_id);
-    auto results = QueryDatabase(query);
-	if (!results.Success())
+	std::string query = StringFormat(
+		"DELETE FROM object_contents WHERE parentid = %i AND zoneid = %i",
+		parent_id,
+		zone_id
+	);
+
+	auto results = database.QueryDatabase(query);
+	if (!results.Success()) {
 		LogError("Error in ZoneDatabase::DeleteWorldContainer: [{}]", results.ErrorMessage().c_str());
+	}
 
 }
 
@@ -825,7 +796,7 @@ TraderCharges_Struct* ZoneDatabase::LoadTraderItemWithCharges(uint32 char_id)
 	return loadti;
 }
 
-EQEmu::ItemInstance* ZoneDatabase::LoadSingleTraderItem(uint32 CharID, int SerialNumber) {
+EQ::ItemInstance* ZoneDatabase::LoadSingleTraderItem(uint32 CharID, int SerialNumber) {
 	std::string query = StringFormat("SELECT * FROM trader WHERE char_id = %i AND serialnumber = %i "
                                     "ORDER BY slot_id LIMIT 80", CharID, SerialNumber);
     auto results = QueryDatabase(query);
@@ -843,7 +814,7 @@ EQEmu::ItemInstance* ZoneDatabase::LoadSingleTraderItem(uint32 CharID, int Seria
 	int Charges = atoi(row[3]);
 	int Cost = atoi(row[4]);
 
-	const EQEmu::ItemData *item = database.GetItem(ItemID);
+	const EQ::ItemData *item = database.GetItem(ItemID);
 
 	if(!item) {
 		LogTrading("Unable to create item\n");
@@ -854,7 +825,7 @@ EQEmu::ItemInstance* ZoneDatabase::LoadSingleTraderItem(uint32 CharID, int Seria
     if (item->NoDrop == 0)
         return nullptr;
 
-    EQEmu::ItemInstance* inst = database.CreateItem(item);
+    EQ::ItemInstance* inst = database.CreateItem(item);
 	if(!inst) {
 		LogTrading("Unable to create item instance\n");
 		fflush(stdout);
@@ -897,7 +868,7 @@ void ZoneDatabase::UpdateTraderItemPrice(int CharID, uint32 ItemID, uint32 Charg
 
 	LogTrading("ZoneDatabase::UpdateTraderPrice([{}], [{}], [{}], [{}])", CharID, ItemID, Charges, NewPrice);
 
-	const EQEmu::ItemData *item = database.GetItem(ItemID);
+	const EQ::ItemData *item = database.GetItem(ItemID);
 
 	if(!item)
 		return;
@@ -1222,12 +1193,12 @@ bool ZoneDatabase::LoadCharacterMemmedSpells(uint32 character_id, PlayerProfile_
 	auto results = database.QueryDatabase(query);
 	int i = 0;
 	/* Initialize Spells */
-	for (i = 0; i < EQEmu::spells::SPELL_GEM_COUNT; i++){
+	for (i = 0; i < EQ::spells::SPELL_GEM_COUNT; i++){
 		pp->mem_spells[i] = 0xFFFFFFFF;
 	}
 	for (auto row = results.begin(); row != results.end(); ++row) {
 		i = atoi(row[0]);
-		if (i < EQEmu::spells::SPELL_GEM_COUNT && atoi(row[1]) <= SPDAT_RECORDS){
+		if (i < EQ::spells::SPELL_GEM_COUNT && atoi(row[1]) <= SPDAT_RECORDS){
 			pp->mem_spells[i] = atoi(row[1]);
 		}
 	}
@@ -1243,10 +1214,10 @@ bool ZoneDatabase::LoadCharacterSpellBook(uint32 character_id, PlayerProfile_Str
 		"`character_spells`		"
 		"WHERE `id` = %u ORDER BY `slot_id`", character_id);
 	auto results = database.QueryDatabase(query);
-	
+
 	/* Initialize Spells */
-	
-	memset(pp->spell_book, 0xFF, (sizeof(uint32) * EQEmu::spells::SPELLBOOK_SIZE));
+
+	memset(pp->spell_book, 0xFF, (sizeof(uint32) * EQ::spells::SPELLBOOK_SIZE));
 
 	// We have the ability to block loaded spells by max id on a per-client basis..
 	// but, we do not have to ability to keep players from using older clients after
@@ -1257,11 +1228,11 @@ bool ZoneDatabase::LoadCharacterSpellBook(uint32 character_id, PlayerProfile_Str
 		int idx = atoi(row[0]);
 		int id = atoi(row[1]);
 
-		if (idx < 0 || idx >= EQEmu::spells::SPELLBOOK_SIZE)
+		if (idx < 0 || idx >= EQ::spells::SPELLBOOK_SIZE)
 			continue;
 		if (id < 3 || id > SPDAT_RECORDS) // 3 ("Summon Corpse") is the first scribable spell in spells_us.txt
 			continue;
-		
+
 		pp->spell_book[idx] = id;
 	}
 
@@ -1405,11 +1376,11 @@ bool ZoneDatabase::LoadCharacterMaterialColor(uint32 character_id, PlayerProfile
 bool ZoneDatabase::LoadCharacterBandolier(uint32 character_id, PlayerProfile_Struct* pp)
 {
 	std::string query = StringFormat("SELECT `bandolier_id`, `bandolier_slot`, `item_id`, `icon`, `bandolier_name` FROM `character_bandolier` WHERE `id` = %u LIMIT %u",
-		character_id, EQEmu::profile::BANDOLIERS_SIZE);
+		character_id, EQ::profile::BANDOLIERS_SIZE);
 	auto results = database.QueryDatabase(query); int i = 0; int r = 0; int si = 0;
-	for (i = 0; i < EQEmu::profile::BANDOLIERS_SIZE; i++) {
+	for (i = 0; i < EQ::profile::BANDOLIERS_SIZE; i++) {
 		pp->bandoliers[i].Name[0] = '\0';
-		for (int si = 0; si < EQEmu::profile::BANDOLIER_ITEM_COUNT; si++) {
+		for (int si = 0; si < EQ::profile::BANDOLIER_ITEM_COUNT; si++) {
 			pp->bandoliers[i].Items[si].ID = 0;
 			pp->bandoliers[i].Items[si].Icon = 0;
 			pp->bandoliers[i].Items[si].Name[0] = '\0';
@@ -1421,7 +1392,7 @@ bool ZoneDatabase::LoadCharacterBandolier(uint32 character_id, PlayerProfile_Str
 		i = atoi(row[r]); /* Bandolier ID */ r++;
 		si = atoi(row[r]); /* Bandolier Slot */ r++;
 
-		const EQEmu::ItemData* item_data = database.GetItem(atoi(row[r]));
+		const EQ::ItemData* item_data = database.GetItem(atoi(row[r]));
 		if (item_data) {
 			pp->bandoliers[i].Items[si].ID = item_data->ID; r++;
 			pp->bandoliers[i].Items[si].Icon = atoi(row[r]); r++; // Must use db value in case an Ornamentation is assigned
@@ -1443,7 +1414,7 @@ bool ZoneDatabase::LoadCharacterTribute(uint32 character_id, PlayerProfile_Struc
 	std::string query = StringFormat("SELECT `tier`, `tribute` FROM `character_tribute` WHERE `id` = %u", character_id);
 	auto results = database.QueryDatabase(query);
 	int i = 0;
-	for (i = 0; i < EQEmu::invtype::TRIBUTE_SIZE; i++){
+	for (i = 0; i < EQ::invtype::TRIBUTE_SIZE; i++){
 		pp->tributes[i].tribute = 0xFFFFFFFF;
 		pp->tributes[i].tier = 0;
 	}
@@ -1462,10 +1433,10 @@ bool ZoneDatabase::LoadCharacterPotions(uint32 character_id, PlayerProfile_Struc
 {
 	std::string query =
 	    StringFormat("SELECT `potion_id`, `item_id`, `icon` FROM `character_potionbelt` WHERE `id` = %u LIMIT %u",
-		character_id, EQEmu::profile::POTION_BELT_SIZE);
+		character_id, EQ::profile::POTION_BELT_SIZE);
 	auto results = database.QueryDatabase(query);
 	int i = 0;
-	for (i = 0; i < EQEmu::profile::POTION_BELT_SIZE; i++) {
+	for (i = 0; i < EQ::profile::POTION_BELT_SIZE; i++) {
 		pp->potionbelt.Items[i].Icon = 0;
 		pp->potionbelt.Items[i].ID = 0;
 		pp->potionbelt.Items[i].Name[0] = '\0';
@@ -1473,7 +1444,7 @@ bool ZoneDatabase::LoadCharacterPotions(uint32 character_id, PlayerProfile_Struc
 
 	for (auto row = results.begin(); row != results.end(); ++row) {
 		i = atoi(row[0]);
-		const EQEmu::ItemData *item_data = database.GetItem(atoi(row[1]));
+		const EQ::ItemData *item_data = database.GetItem(atoi(row[1]));
 		if (!item_data)
 			continue;
 		pp->potionbelt.Items[i].ID = item_data->ID;
@@ -1499,7 +1470,7 @@ bool ZoneDatabase::LoadCharacterBindPoint(uint32 character_id, PlayerProfile_Str
 		if (index < 0 || index > 4)
 			continue;
 
-		pp->binds[index].zoneId = atoi(row[1]);
+		pp->binds[index].zone_id = atoi(row[1]);
 		pp->binds[index].instance_id = atoi(row[2]);
 		pp->binds[index].x = atoi(row[3]);
 		pp->binds[index].y = atoi(row[4]);
@@ -1522,10 +1493,10 @@ bool ZoneDatabase::SaveCharacterBindPoint(uint32 character_id, const BindStruct 
 	std::string query =
 	    StringFormat("REPLACE INTO `character_bind` (id, zone_id, instance_id, x, y, z, heading, slot) VALUES (%u, "
 			 "%u, %u, %f, %f, %f, %f, %i)",
-			 character_id, bind.zoneId, bind.instance_id, bind.x, bind.y, bind.z, bind.heading, bind_num);
+			 character_id, bind.zone_id, bind.instance_id, bind.x, bind.y, bind.z, bind.heading, bind_num);
 
 	LogDebug("ZoneDatabase::SaveCharacterBindPoint for character ID: [{}] zone_id: [{}] instance_id: [{}] position: [{}] [{}] [{}] [{}] bind_num: [{}]",
-		character_id, bind.zoneId, bind.instance_id, bind.x, bind.y, bind.z, bind.heading, bind_num);
+		character_id, bind.zone_id, bind.instance_id, bind.x, bind.y, bind.z, bind.heading, bind_num);
 
 	auto results = QueryDatabase(query);
 	if (!results.RowsAffected())
@@ -1562,7 +1533,7 @@ bool ZoneDatabase::SaveCharacterTribute(uint32 character_id, PlayerProfile_Struc
 	std::string query = StringFormat("DELETE FROM `character_tribute` WHERE `id` = %u", character_id);
 	QueryDatabase(query);
 	/* Save Tributes only if we have values... */
-	for (int i = 0; i < EQEmu::invtype::TRIBUTE_SIZE; i++){
+	for (int i = 0; i < EQ::invtype::TRIBUTE_SIZE; i++){
 		if (pp->tributes[i].tribute >= 0 && pp->tributes[i].tribute != TRIBUTE_NONE){
 			std::string query = StringFormat("REPLACE INTO `character_tribute` (id, tier, tribute) VALUES (%u, %u, %u)", character_id, pp->tributes[i].tier, pp->tributes[i].tribute);
 			QueryDatabase(query);
@@ -1605,11 +1576,11 @@ bool ZoneDatabase::SaveCharacterLeadershipAA(uint32 character_id, PlayerProfile_
 }
 
 bool ZoneDatabase::SaveCharacterData(uint32 character_id, uint32 account_id, PlayerProfile_Struct* pp, ExtendedProfile_Struct* m_epp){
-	
+
 	/* If this is ever zero - the client hasn't fully loaded and potentially crashed during zone */
 	if (account_id <= 0)
 		return false;
-	
+
 	std::string mail_key = database.GetMailKey(character_id);
 
 	clock_t t = std::clock(); /* Function timer start */
@@ -2506,7 +2477,9 @@ const NPCType *ZoneDatabase::LoadNPCTypesData(uint32 npc_type_id, bool bulk_load
 		"npc_types.rare_spawn, "
 		"npc_types.stuck_behavior, "
 		"npc_types.model, "
-		"npc_types.flymode "
+		"npc_types.flymode, "
+		"npc_types.always_aggro, "
+		"npc_types.exp_mod "
 		"FROM npc_types %s",
 		where_condition.c_str()
 	);
@@ -2640,7 +2613,7 @@ const NPCType *ZoneDatabase::LoadNPCTypesData(uint32 npc_type_id, bool bulk_load
 			else {
 				auto armorTint_row = armortint_results.begin();
 
-				for (int index = EQEmu::textures::textureBegin; index <= EQEmu::textures::LastTexture; index++) {
+				for (int index = EQ::textures::textureBegin; index <= EQ::textures::LastTexture; index++) {
 					temp_npctype_data->armor_tint.Slot[index].Color = atoi(armorTint_row[index * 3]) << 16;
 					temp_npctype_data->armor_tint.Slot[index].Color |= atoi(armorTint_row[index * 3 + 1]) << 8;
 					temp_npctype_data->armor_tint.Slot[index].Color |= atoi(armorTint_row[index * 3 + 2]);
@@ -2651,7 +2624,7 @@ const NPCType *ZoneDatabase::LoadNPCTypesData(uint32 npc_type_id, bool bulk_load
 		}
 		// Try loading npc_types tint fields if armor tint is 0 or query failed to get results
 		if (armor_tint_id == 0) {
-			for (int index = EQEmu::textures::armorChest; index < EQEmu::textures::materialCount; index++) {
+			for (int index = EQ::textures::armorChest; index < EQ::textures::materialCount; index++) {
 				temp_npctype_data->armor_tint.Slot[index].Color = temp_npctype_data->armor_tint.Slot[0].Color; // odd way to 'zero-out' the array...
 			}
 		}
@@ -2703,11 +2676,13 @@ const NPCType *ZoneDatabase::LoadNPCTypesData(uint32 npc_type_id, bool bulk_load
 		temp_npctype_data->charm_avoidance_rating = atoi(row[105]);
 		temp_npctype_data->charm_atk              = atoi(row[106]);
 
-		temp_npctype_data->skip_global_loot = atoi(row[107]) != 0;
-		temp_npctype_data->rare_spawn       = atoi(row[108]) != 0;
-		temp_npctype_data->stuck_behavior   = atoi(row[109]);
-		temp_npctype_data->use_model        = atoi(row[110]);
-		temp_npctype_data->flymode          = atoi(row[111]);
+		temp_npctype_data->skip_global_loot 	= atoi(row[107]) != 0;
+		temp_npctype_data->rare_spawn       	= atoi(row[108]) != 0;
+		temp_npctype_data->stuck_behavior   	= atoi(row[109]);
+		temp_npctype_data->use_model        	= atoi(row[110]);
+		temp_npctype_data->flymode          	= atoi(row[111]);
+		temp_npctype_data->always_aggro	        = atoi(row[112]);
+		temp_npctype_data->exp_mod              = atoi(row[113]);
 
 		temp_npctype_data->skip_auto_scale = false; // hardcoded here for now
 
@@ -2876,7 +2851,7 @@ const NPCType* ZoneDatabase::GetMercType(uint32 id, uint16 raceid, uint32 client
 		tmpNPCType->armor_tint.Slot[0].Color |= (tmpNPCType->armor_tint.Slot[0].Color) ? (0xFF << 24) : 0;
 
 		if (armor_tint_id == 0)
-			for (int index = EQEmu::textures::armorChest; index <= EQEmu::textures::LastTexture; index++)
+			for (int index = EQ::textures::armorChest; index <= EQ::textures::LastTexture; index++)
 				tmpNPCType->armor_tint.Slot[index].Color = tmpNPCType->armor_tint.Slot[0].Color;
 		else if (tmpNPCType->armor_tint.Slot[0].Color == 0) {
 			std::string armorTint_query = StringFormat("SELECT red1h, grn1h, blu1h, "
@@ -2896,7 +2871,7 @@ const NPCType* ZoneDatabase::GetMercType(uint32 id, uint16 raceid, uint32 client
 			else {
 				auto armorTint_row = results.begin();
 
-				for (int index = EQEmu::textures::textureBegin; index <= EQEmu::textures::LastTexture; index++) {
+				for (int index = EQ::textures::textureBegin; index <= EQ::textures::LastTexture; index++) {
 					tmpNPCType->armor_tint.Slot[index].Color = atoi(armorTint_row[index * 3]) << 16;
 					tmpNPCType->armor_tint.Slot[index].Color |= atoi(armorTint_row[index * 3 + 1]) << 8;
 					tmpNPCType->armor_tint.Slot[index].Color |= atoi(armorTint_row[index * 3 + 2]);
@@ -3255,7 +3230,7 @@ void ZoneDatabase::LoadMercEquipment(Merc *merc) {
 
     int itemCount = 0;
     for(auto row = results.begin(); row != results.end(); ++row) {
-		if (itemCount == EQEmu::invslot::EQUIPMENT_COUNT)
+		if (itemCount == EQ::invslot::EQUIPMENT_COUNT)
             break;
 
         if(atoi(row[0]) == 0)
@@ -3394,7 +3369,7 @@ void ZoneDatabase::RefreshGroupFromDB(Client *client){
 	client->QueuePacket(outapp);
 	safe_delete(outapp);
 
-	if (client->ClientVersion() >= EQEmu::versions::ClientVersion::SoD) {
+	if (client->ClientVersion() >= EQ::versions::ClientVersion::SoD) {
 		group->NotifyMainTank(client, 1);
 		group->NotifyPuller(client, 1);
 	}
@@ -3549,7 +3524,7 @@ void ZoneDatabase::ListAllInstances(Client* client, uint32 charid)
     client->Message(Chat::White, "%s is part of the following instances:", name);
 
     for (auto row = results.begin(); row != results.end(); ++row) {
-        client->Message(Chat::White, "%s - id: %lu, version: %lu", database.GetZoneName(atoi(row[1])),
+        client->Message(Chat::White, "%s - id: %lu, version: %lu", ZoneName(atoi(row[1])),
 				(unsigned long)atoi(row[0]), (unsigned long)atoi(row[2]));
     }
 }
@@ -3696,12 +3671,12 @@ void ZoneDatabase::LoadBuffs(Client *client)
 	}
 
 	// We load up to the most our client supports
-	max_slots = EQEmu::spells::StaticLookup(client->ClientVersion())->LongBuffs;
+	max_slots = EQ::spells::StaticLookup(client->ClientVersion())->LongBuffs;
 	for (int index = 0; index < max_slots; ++index) {
 		if (!IsValidSpell(buffs[index].spellid))
 			continue;
 
-		for (int effectIndex = 0; effectIndex < 12; ++effectIndex) {
+		for (int effectIndex = 0; effectIndex < EFFECT_COUNT; ++effectIndex) {
 
 			if (spells[buffs[index].spellid].effectid[effectIndex] == SE_Charm) {
 				buffs[index].spellid = SPELL_UNKNOWN;
@@ -3770,13 +3745,14 @@ void ZoneDatabase::SavePetInfo(Client *client)
 			continue;
 
 		query = StringFormat("INSERT INTO `character_pet_info` "
-				"(`char_id`, `pet`, `petname`, `petpower`, `spell_id`, `hp`, `mana`, `size`) "
-				"VALUES (%u, %u, '%s', %i, %u, %u, %u, %f) "
+				"(`char_id`, `pet`, `petname`, `petpower`, `spell_id`, `hp`, `mana`, `size`, `taunting`) "
+				"VALUES (%u, %u, '%s', %i, %u, %u, %u, %f, %u) "
 				"ON DUPLICATE KEY UPDATE `petname` = '%s', `petpower` = %i, `spell_id` = %u, "
-				"`hp` = %u, `mana` = %u, `size` = %f",
+				"`hp` = %u, `mana` = %u, `size` = %f, `taunting` = %u",
 				client->CharacterID(), pet, petinfo->Name, petinfo->petpower, petinfo->SpellID,
-				petinfo->HP, petinfo->Mana, petinfo->size, // and now the ON DUPLICATE ENTRIES
-				petinfo->Name, petinfo->petpower, petinfo->SpellID, petinfo->HP, petinfo->Mana, petinfo->size);
+				petinfo->HP, petinfo->Mana, petinfo->size, (petinfo->taunting) ? 1 : 0, 
+				// and now the ON DUPLICATE ENTRIES
+				petinfo->Name, petinfo->petpower, petinfo->SpellID, petinfo->HP, petinfo->Mana, petinfo->size, (petinfo->taunting) ? 1 : 0);
 		results = database.QueryDatabase(query);
 		if (!results.Success())
 			return;
@@ -3805,7 +3781,7 @@ void ZoneDatabase::SavePetInfo(Client *client)
 		query.clear();
 
 		// pet inventory!
-		for (int index = EQEmu::invslot::EQUIPMENT_BEGIN; index <= EQEmu::invslot::EQUIPMENT_END; index++) {
+		for (int index = EQ::invslot::EQUIPMENT_BEGIN; index <= EQ::invslot::EQUIPMENT_END; index++) {
 			if (!petinfo->Items[index])
 				continue;
 
@@ -3848,7 +3824,7 @@ void ZoneDatabase::LoadPetInfo(Client *client)
 	memset(suspended, 0, sizeof(PetInfo));
 
 	std::string query = StringFormat("SELECT `pet`, `petname`, `petpower`, `spell_id`, "
-					 "`hp`, `mana`, `size` FROM `character_pet_info` "
+					 "`hp`, `mana`, `size` , `taunting` FROM `character_pet_info` "
 					 "WHERE `char_id` = %u",
 					 client->CharacterID());
 	auto results = database.QueryDatabase(query);
@@ -3873,6 +3849,7 @@ void ZoneDatabase::LoadPetInfo(Client *client)
 		pi->HP = atoul(row[4]);
 		pi->Mana = atoul(row[5]);
 		pi->size = atof(row[6]);
+		pi->taunting = (bool) atoi(row[7]);
 	}
 
 	query = StringFormat("SELECT `pet`, `slot`, `spell_id`, `caster_level`, `castername`, "
@@ -3937,7 +3914,7 @@ void ZoneDatabase::LoadPetInfo(Client *client)
 			continue;
 
 		int slot = atoi(row[1]);
-		if (slot < EQEmu::invslot::EQUIPMENT_BEGIN || slot > EQEmu::invslot::EQUIPMENT_END)
+		if (slot < EQ::invslot::EQUIPMENT_BEGIN || slot > EQ::invslot::EQUIPMENT_END)
 			continue;
 
 		pi->Items[slot] = atoul(row[2]);
@@ -3953,8 +3930,8 @@ bool ZoneDatabase::GetFactionData(FactionMods* fm, uint32 class_mod, uint32 race
 	}
 
 	fm->base = faction_array[faction_id]->base;
-	fm->min = faction_array[faction_id]->min; // The lowest your personal earned faction can go - before race/class/diety adjustments.
-	fm->max = faction_array[faction_id]->max; // The highest your personal earned faction can go - before race/class/diety adjustments.
+	fm->min = faction_array[faction_id]->min; // The lowest your personal earned faction can go - before race/class/deity adjustments.
+	fm->max = faction_array[faction_id]->max; // The highest your personal earned faction can go - before race/class/deity adjustments.
 
 	if(class_mod > 0) {
 		char str[32];
@@ -4087,9 +4064,9 @@ bool ZoneDatabase::LoadFactionData()
 	faction_array = new Faction *[max_faction + 1];
 
 	memset(faction_array, 0, (sizeof(Faction*) * (max_faction + 1)));
-	
-	std::vector<size_t> faction_ids;
-	
+
+	std::vector<std::string> faction_ids;
+
 	// load factions
     query = "SELECT `id`, `name`, `base` FROM `faction_list`";
 
@@ -4117,13 +4094,13 @@ bool ZoneDatabase::LoadFactionData()
 		faction_array[index]->base = atoi(fr_row[2]);
 		faction_array[index]->min = MIN_PERSONAL_FACTION;
 		faction_array[index]->max = MAX_PERSONAL_FACTION;
-		
-		faction_ids.push_back(index);
+
+		faction_ids.push_back(fr_row[0]);
 	}
 
 	LogInfo("[{}] Faction(s) loaded...", faction_ids.size());
 
-	const std::string faction_id_criteria(implode(",", std::pair<char, char>('\'', '\''), faction_ids));
+	const std::string faction_id_criteria(implode(",", faction_ids));
 
 	// load faction mins/maxes
 	query = fmt::format("SELECT `client_faction_id`, `min`, `max` FROM `faction_base_data` WHERE `client_faction_id` IN ({})", faction_id_criteria);
@@ -4153,8 +4130,8 @@ bool ZoneDatabase::LoadFactionData()
 	else {
 		LogInfo("Unable to load Faction Base data...");
 	}
-	
-	// load race, class and diety modifiers
+
+	// load race, class and deity modifiers
 	query = fmt::format("SELECT `faction_id`, `mod`, `mod_name` FROM `faction_list_mod` WHERE `faction_id` IN ({})", faction_id_criteria);
 
 	auto modifier_results = QueryDatabase(query);
@@ -4278,6 +4255,18 @@ uint32 ZoneDatabase::SendCharacterCorpseToGraveyard(uint32 dbid, uint32 zone_id,
 	return dbid;
 }
 
+void ZoneDatabase::SendCharacterCorpseToNonInstance(uint32 corpse_db_id)
+{
+	if (corpse_db_id != 0)
+	{
+		auto query = fmt::format(SQL(
+			UPDATE character_corpses SET instance_id = 0 WHERE id = {};
+		), corpse_db_id);
+
+		QueryDatabase(query);
+	}
+}
+
 uint32 ZoneDatabase::GetCharacterCorpseDecayTimer(uint32 corpse_db_id){
 	std::string query = StringFormat("SELECT(UNIX_TIMESTAMP() - UNIX_TIMESTAMP(time_of_death)) FROM `character_corpses` WHERE `id` = %d AND NOT `time_of_death` = 0", corpse_db_id);
 	auto results = QueryDatabase(query);
@@ -4288,10 +4277,10 @@ uint32 ZoneDatabase::GetCharacterCorpseDecayTimer(uint32 corpse_db_id){
 	return 0;
 }
 
-uint32 ZoneDatabase::UpdateCharacterCorpse(uint32 db_id, uint32 char_id, const char* char_name, uint32 zone_id, uint16 instance_id, PlayerCorpse_Struct* dbpc, const glm::vec4& position, bool is_rezzed) {
+uint32 ZoneDatabase::UpdateCharacterCorpse(uint32 db_id, uint32 char_id, const char* char_name, uint32 zone_id, uint16 instance_id, PlayerCorpse_Struct* dbpc, const glm::vec4& position, uint32 guild_id, bool is_rezzed) {
 	std::string query = StringFormat("UPDATE `character_corpses` "
                                     "SET `charname` = '%s', `zone_id` = %u, `instance_id` = %u, `charid` = %d, "
-                                    "`x` = %1.1f,`y` =	%1.1f,`z` =	%1.1f, `heading` = %1.1f, "
+                                    "`x` = %1.1f,`y` =	%1.1f,`z` = %1.1f, `heading` = %1.1f, `guild_consent_id` = %u, "
                                     "`is_locked` = %d, `exp` = %u, `size` = %f, `level` = %u, "
                                     "`race` = %u, `gender` = %u, `class` = %u, `deity` = %u, "
                                     "`texture` = %u, `helm_texture` = %u, `copper` = %u, "
@@ -4303,7 +4292,7 @@ uint32 ZoneDatabase::UpdateCharacterCorpse(uint32 db_id, uint32 char_id, const c
                                     "`wc_7` = %u, `wc_8` = %u, `wc_9` = %u "
                                     "WHERE `id` = %u",
                                     EscapeString(char_name).c_str(), zone_id, instance_id, char_id,
-                                    position.x, position.y, position.z, position.w,
+                                    position.x, position.y, position.z, position.w, guild_id,
                                     dbpc->locked, dbpc->exp, dbpc->size, dbpc->level, dbpc->race,
                                     dbpc->gender, dbpc->class_, dbpc->deity, dbpc->texture,
                                     dbpc->helmtexture, dbpc->copper, dbpc->silver, dbpc->gold,
@@ -4319,12 +4308,19 @@ uint32 ZoneDatabase::UpdateCharacterCorpse(uint32 db_id, uint32 char_id, const c
 	return db_id;
 }
 
+uint32 ZoneDatabase::UpdateCharacterCorpseConsent(uint32 charid, uint32 guildid)
+{
+	std::string query = fmt::format("UPDATE `character_corpses` SET `guild_consent_id` = '{}' WHERE charid = '{}'", guildid, charid);
+	auto results = QueryDatabase(query);
+	return results.RowsAffected();
+}
+
 void ZoneDatabase::MarkCorpseAsRezzed(uint32 db_id) {
 	std::string query = StringFormat("UPDATE `character_corpses` SET `is_rezzed` = 1 WHERE `id` = %i", db_id);
 	auto results = QueryDatabase(query);
 }
 
-uint32 ZoneDatabase::SaveCharacterCorpse(uint32 charid, const char* charname, uint32 zoneid, uint16 instanceid, PlayerCorpse_Struct* dbpc, const glm::vec4& position) {
+uint32 ZoneDatabase::SaveCharacterCorpse(uint32 charid, const char* charname, uint32 zoneid, uint16 instanceid, PlayerCorpse_Struct* dbpc, const glm::vec4& position, uint32 guildid) {
 	/* Dump Basic Corpse Data */
 	std::string query = StringFormat(
 		"INSERT INTO `character_corpses` "
@@ -4336,6 +4332,7 @@ uint32 ZoneDatabase::SaveCharacterCorpse(uint32 charid, const char* charname, ui
 		"`y` = %1.1f,  "
 		"`z` = %1.1f,  "
 		"`heading` = %1.1f, "
+		"`guild_consent_id` = %u,  "
 		"`time_of_death` = NOW(),  "
 		"`is_buried` =	0,  "
 		"`is_locked` = %d, "
@@ -4379,6 +4376,7 @@ uint32 ZoneDatabase::SaveCharacterCorpse(uint32 charid, const char* charname, ui
 		position.y,
 		position.z,
 		position.w,
+		guildid,
 		dbpc->locked,
 		dbpc->exp,
 		dbpc->size,
@@ -4637,7 +4635,7 @@ bool ZoneDatabase::LoadCharacterCorpseData(uint32 corpse_id, PlayerCorpse_Struct
 
 Corpse* ZoneDatabase::SummonBuriedCharacterCorpses(uint32 char_id, uint32 dest_zone_id, uint16 dest_instance_id, const glm::vec4& position) {
 	Corpse* corpse = nullptr;
-	std::string query = StringFormat("SELECT `id`, `charname`, `time_of_death`, `is_rezzed` "
+	std::string query = StringFormat("SELECT `id`, `charname`, `time_of_death`, `is_rezzed`, `guild_consent_id` "
                                     "FROM `character_corpses` "
                                     "WHERE `charid` = '%u' AND `is_buried` = 1 "
                                     "ORDER BY `time_of_death` LIMIT 1",
@@ -4652,7 +4650,8 @@ Corpse* ZoneDatabase::SummonBuriedCharacterCorpses(uint32 char_id, uint32 dest_z
 			position,
 			row[2], 				 // char* time_of_death
 			atoi(row[3]) == 1, 		 // bool rezzed
-			false					 // bool was_at_graveyard
+			false,					 // bool was_at_graveyard
+			atoul(row[4])            // uint32 guild_consent_id
 		);
 		if (!corpse)
             continue;
@@ -4678,7 +4677,7 @@ bool ZoneDatabase::SummonAllCharacterCorpses(uint32 char_id, uint32 dest_zone_id
 	auto results = QueryDatabase(query);
 
 	query = StringFormat(
-		"SELECT `id`, `charname`, `time_of_death`, `is_rezzed` FROM `character_corpses` WHERE `charid` = '%u'"
+		"SELECT `id`, `charname`, `time_of_death`, `is_rezzed`, `guild_consent_id` FROM `character_corpses` WHERE `charid` = '%u'"
 		"ORDER BY time_of_death",
 		char_id);
 	results = QueryDatabase(query);
@@ -4691,7 +4690,8 @@ bool ZoneDatabase::SummonAllCharacterCorpses(uint32 char_id, uint32 dest_zone_id
 			position,
 			row[2],
 			atoi(row[3]) == 1,
-			false);
+			false,
+			atoul(row[4]));
 
 		if (corpse) {
 			entity_list.AddCorpse(corpse);
@@ -4705,6 +4705,47 @@ bool ZoneDatabase::SummonAllCharacterCorpses(uint32 char_id, uint32 dest_zone_id
 	}
 
 	return (CorpseCount > 0);
+}
+
+int ZoneDatabase::CountCharacterCorpses(uint32 char_id) {
+	std::string query = fmt::format(
+		SQL(
+			SELECT
+			COUNT(*)
+			FROM
+			character_corpses
+			WHERE
+			charid = '{}'
+		),
+		char_id
+	);
+	auto results = QueryDatabase(query);
+	for (auto row = results.begin(); row != results.end(); ++row) {
+		return atoi(row[0]);
+	}
+	return 0;
+}
+
+int ZoneDatabase::CountCharacterCorpsesByZoneID(uint32 char_id, uint32 zone_id) {
+	std::string query = fmt::format(
+		SQL(
+			SELECT
+			COUNT(*)
+			FROM
+			character_corpses
+			WHERE
+			charid = '{}'
+			AND
+			zone_id = '{}'
+		),
+		char_id,
+		zone_id
+	);
+	auto results = QueryDatabase(query);
+	for (auto row = results.begin(); row != results.end(); ++row) {
+		return atoi(row[0]);
+	}
+	return 0;
 }
 
 bool ZoneDatabase::UnburyCharacterCorpse(uint32 db_id, uint32 new_zone_id, uint16 new_instance_id, const glm::vec4& position) {
@@ -4725,7 +4766,7 @@ bool ZoneDatabase::UnburyCharacterCorpse(uint32 db_id, uint32 new_zone_id, uint1
 Corpse* ZoneDatabase::LoadCharacterCorpse(uint32 player_corpse_id) {
 	Corpse* NewCorpse = 0;
 	std::string query = StringFormat(
-		"SELECT `id`, `charid`, `charname`, `x`, `y`, `z`, `heading`, `time_of_death`, `is_rezzed`, `was_at_graveyard` FROM `character_corpses` WHERE `id` = '%u' LIMIT 1",
+		"SELECT `id`, `charid`, `charname`, `x`, `y`, `z`, `heading`, `time_of_death`, `is_rezzed`, `was_at_graveyard`, `guild_consent_id` FROM `character_corpses` WHERE `id` = '%u' LIMIT 1",
 		player_corpse_id
 	);
 	auto results = QueryDatabase(query);
@@ -4738,7 +4779,8 @@ Corpse* ZoneDatabase::LoadCharacterCorpse(uint32 player_corpse_id) {
 				position,
 				row[7],				 // time_of_death		  char* time_of_death
 				atoi(row[8]) == 1, 	 // is_rezzed			  bool rezzed
-				atoi(row[9])		 // was_at_graveyard	  bool was_at_graveyard
+				atoi(row[9]),		 // was_at_graveyard	  bool was_at_graveyard
+				atoul(row[10])       // guild_consent_id      uint32 guild_consent_id
 			);
 		entity_list.AddCorpse(NewCorpse);
 	}
@@ -4748,10 +4790,10 @@ Corpse* ZoneDatabase::LoadCharacterCorpse(uint32 player_corpse_id) {
 bool ZoneDatabase::LoadCharacterCorpses(uint32 zone_id, uint16 instance_id) {
 	std::string query;
 	if (!RuleB(Zone, EnableShadowrest)){
-		query = StringFormat("SELECT id, charid, charname, x, y, z, heading, time_of_death, is_rezzed, was_at_graveyard FROM character_corpses WHERE zone_id='%u' AND instance_id='%u'", zone_id, instance_id);
+		query = StringFormat("SELECT id, charid, charname, x, y, z, heading, time_of_death, is_rezzed, was_at_graveyard, guild_consent_id FROM character_corpses WHERE zone_id='%u' AND instance_id='%u'", zone_id, instance_id);
 	}
 	else{
-		query = StringFormat("SELECT id, charid, charname, x, y, z, heading, time_of_death, is_rezzed, 0 as was_at_graveyard FROM character_corpses WHERE zone_id='%u' AND instance_id='%u' AND is_buried=0", zone_id, instance_id);
+		query = StringFormat("SELECT id, charid, charname, x, y, z, heading, time_of_death, is_rezzed, 0 as was_at_graveyard, guild_consent_id FROM character_corpses WHERE zone_id='%u' AND instance_id='%u' AND is_buried=0", zone_id, instance_id);
 	}
 
 	auto results = QueryDatabase(query);
@@ -4765,7 +4807,8 @@ bool ZoneDatabase::LoadCharacterCorpses(uint32 zone_id, uint16 instance_id) {
 				position,
 				row[7], 			  // time_of_death		  char* time_of_death
 				atoi(row[8]) == 1, 	  // is_rezzed			  bool rezzed
-				atoi(row[9]))
+				atoi(row[9]),
+				atoul(row[10]))       // guild_consent_id     uint32 guild_consent_id
 		);
 	}
 
@@ -4822,7 +4865,7 @@ uint32 ZoneDatabase::LoadSaylinkID(const char* saylink_text, bool auto_insert)
 {
 	if (!saylink_text || saylink_text[0] == '\0')
 		return 0;
-	
+
 	std::string query = StringFormat("SELECT `id` FROM `saylink` WHERE `phrase` = '%s' LIMIT 1", saylink_text);
 	auto results = QueryDatabase(query);
 	if (!results.Success())
@@ -4847,6 +4890,88 @@ uint32 ZoneDatabase::SaveSaylinkID(const char* saylink_text)
 	auto results = QueryDatabase(query);
 	if (!results.Success())
 		return 0;
-	
+
 	return results.LastInsertedID();
+}
+
+double ZoneDatabase::GetAAEXPModifier(uint32 character_id, uint32 zone_id) const {
+	std::string query = fmt::format(
+		SQL(
+			SELECT
+			`aa_modifier`
+			FROM
+			`character_exp_modifiers`
+			WHERE
+			`character_id` = {}
+			AND
+			(`zone_id` = {} OR `zone_id` = 0)
+			ORDER BY `zone_id` DESC
+			LIMIT 1
+		),
+		character_id,
+		zone_id
+	);
+	auto results = database.QueryDatabase(query);
+	for (auto row = results.begin(); row != results.end(); ++row) {
+		return atof(row[0]);
+	}
+	return 1.0f;
+}
+
+double ZoneDatabase::GetEXPModifier(uint32 character_id, uint32 zone_id) const {
+	std::string query = fmt::format(
+		SQL(
+			SELECT
+			`exp_modifier`
+			FROM
+			`character_exp_modifiers`
+			WHERE
+			`character_id` = {}
+			AND
+			(`zone_id` = {} OR `zone_id` = 0)
+			ORDER BY `zone_id` DESC
+			LIMIT 1
+		),
+		character_id,
+		zone_id
+	);
+	auto results = database.QueryDatabase(query);
+	for (auto row = results.begin(); row != results.end(); ++row) {
+		return atof(row[0]);
+	}
+	return 1.0f;
+}
+
+void ZoneDatabase::SetAAEXPModifier(uint32 character_id, uint32 zone_id, double aa_modifier) {
+	float exp_modifier = GetEXPModifier(character_id, zone_id);
+	std::string query = fmt::format(
+		SQL(
+			REPLACE INTO
+			`character_exp_modifiers`
+			VALUES
+			({}, {}, {}, {})
+		),
+		character_id,
+		zone_id,
+		aa_modifier,
+		exp_modifier
+	);
+	database.QueryDatabase(query);
+}
+
+void ZoneDatabase::SetEXPModifier(uint32 character_id, uint32 zone_id, double exp_modifier) {
+	float aa_modifier = GetAAEXPModifier(character_id, zone_id);
+	std::string query = fmt::format(
+		SQL(
+			REPLACE INTO
+			`character_exp_modifiers`
+			VALUES
+			({}, {}, {}, {})
+		),
+		character_id,
+		zone_id,
+		aa_modifier,
+		exp_modifier
+	);
+	database.QueryDatabase(query);
 }

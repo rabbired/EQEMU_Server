@@ -22,6 +22,7 @@
 #include "skills.h"
 
 #define SPELL_UNKNOWN 0xFFFF
+#define POISON_PROC 0xFFFE
 #define SPELLBOOK_UNKNOWN 0xFFFFFFFF		//player profile spells are 32 bit
 
 //some spell IDs which will prolly change, but are needed
@@ -31,6 +32,129 @@
 #define SPELL_HARM_TOUCH2 2821
 #define SPELL_IMP_HARM_TOUCH 2774
 #define SPELL_NPC_HARM_TOUCH 929
+#define SPELL_AVATAR_ST_PROC 2434
+#define SPELL_CAZIC_TOUCH 982
+#define SPELL_TOUCH_OF_VINITRAS 2859
+#define SPELL_DESPERATE_HOPE 841
+#define SPELL_CHARM 300
+#define SPELL_METAMORPHOSIS65 2314
+#define SPELL_JT_BUFF 3716
+#define SPELL_CAN_O_WHOOP_ASS 911
+#define SPELL_PHOENIX_CHARM 3014
+#define SPELL_AVATAR_KNOCKBACK 905
+#define SPELL_SHAPECHANGE65 2079
+#define SPELL_SUNSET_HOME1218 1218
+#define SPELL_SUNSET_HOME819 819
+#define SPELL_SHAPECHANGE75 780
+#define SPELL_SHAPECHANGE80 781
+#define SPELL_SHAPECHANGE85 782
+#define SPELL_SHAPECHANGE90 783
+#define SPELL_SHAPECHANGE95 784
+#define SPELL_SHAPECHANGE100 785
+#define SPELL_SHAPECHANGE25 1200
+#define SPELL_SHAPECHANGE30 1201
+#define SPELL_SHAPECHANGE35 1202
+#define SPELL_SHAPECHANGE40 1203
+#define SPELL_SHAPECHANGE45 1204
+#define SPELL_SHAPECHANGE50 1205
+#define SPELL_NPC_AEGOLISM 1343
+#define SPELL_SHAPECHANGE55 1923
+#define SPELL_SHAPECHANGE60 1924
+#define SPELL_COMMAND_OF_DRUZZIL 3355
+#define SPELL_SHAPECHANGE70 6503
+#define SPELL_MANA_BURN 2751
+#define SPELL_LIFE_BURN 2755
+// these have known hardcoded behavior but we don't do anything yet, move them above this comment when fixed
+#define SPELL_THE_DAINS_JUSTICE 1476
+#define SPELL_MODULATION 1502
+#define SPELL_TORPOR 1576
+#define SPELL_SPLURT 1620
+#define SPELL_SEBILITE_POX 1814
+#define SPELL_SOUL_WELL 1816
+#define SPELL_MYSTICAL_TRANSVERGENCE 2716
+#define SPELL_ACT_OF_VALOR 2775
+#define SPELL_STOICISM 3694
+#define SPELL_ALTER_PLANE_HATE 666
+#define SPELL_ALTER_PLANE_SKY 674
+#define SPELL_DENONS_DESPERATE_DIRGE 742
+#define SPELL_BOND_OF_SATHIR 833
+#define SPELL_DISEASED_CLOUD 836
+#define SPELL_ACTING_RESIST 775
+#define SPELL_ACTING_SHIELD 776
+#define SPELL_ACTING_GUARD 777
+#define SPELL_GUIDE_ACTING 778
+#define SPELL_BYE_BYE 779
+#define SPELL_ACTING_RESIST_II 1206
+#define SPELL_ACTING_SHIELD_II 1207
+#define SPELL_ACTING_GUARD_II 1208
+#define SPELL_GUIDE_ACTING2 1209
+#define SPELL_BYE_BYTE2 1210
+#define SPELL_GUIDE_CANCEL_MAGIC 1211
+#define SPELL_GUIDE_JOURNEY 1212
+#define SPELL_GUIDE_VISION 1213
+#define SPELL_GUIDE_HEALTH 1214
+#define SPELL_GUIDE_INVULNERABILITY 1215
+#define SPELL_GUIDE_BOLT 1216
+#define SPELL_GUIDE_MEMORY_BLUE 1217
+#define SPELL_GUIDE_ALLIANCE 1219
+#define SPELL_SPECIAL_SIGHT 1220
+#define SPELL_TERROR_OF_DARKNESS 1221
+#define SPELL_TERROR_OF_SHADOWS 1222
+#define SPELL_TERROR_OF_DEATH 1223
+#define SPELL_TERROR_OF_TERRIS 1224
+#define SPELL_VOICE_OF_DARKNESS 1225
+#define SPELL_VOICE_OF_SHADOWS 1226
+#define SPELL_VOICE_OF_DEATH 1227
+#define SPELL_VOICE_OF_TERRIS 1228
+#define SPELL_VENGEANCE_V 1229
+#define SPELL_VENGEANCE_VII 1230
+#define SPELL_VENGEANCE_VIII 1231
+#define SPELL_VENGEANCE_IX 1232
+#define SPELL_CORRUPTED_LACERATION 1233
+#define SPELL_VISIONS_OF_CHAOS 1234
+#define SPELL_VISIONS_OF_PAIN 1235
+#define SPELL_COMMANDING_PRESENCE 1236
+#define SPELL_MALICIOUS_INTENT 1237
+#define SPELL_CURSE_OF_FLAMES 1238
+#define SPELL_DEVOURING_CONFLAGRATION 1239
+#define SPELL_AVATAR_SHIELD 1240
+#define SPELL_AVATAR_SIGHT 1241
+#define SPELL_AVATAR_GUARD 1242
+#define SPELL_AVATAR_RESIST 1243
+#define SPELL_MAGI_BOLT 1244
+#define SPELL_MAGI_STRIKE 1245
+#define SPELL_MAGI_CURSE 1246
+#define SPELL_MAGI_CIRCLE 1247
+#define SPELL_SPIRITUAL_ECHO 1248
+#define SPELL_BRISTLING_ARMAMENT 1249
+#define SPELL_WATON_DESTRUCTION 1250
+#define SPELL_ACTING_MAGIC_RESIST_I 1900
+#define SPELL_ACTING_FIRE_RESIST_I 1901
+#define SPELL_ACTING_COLD_RESIST_I 1902
+#define SPELL_ACTING_POISON_RESIST_I 1903
+#define SPELL_ACTING_DISEASE_RESIST_I 1904
+#define SPELL_ACTING_MAGIC_RESIST_II 1905
+#define SPELL_ACTING_FIRE_RESIST_II 1906
+#define SPELL_ACTING_COLD_RESIST_II 1907
+#define SPELL_ACTING_POISON_RESIST_II 1908
+#define SPELL_ACTING_DISEASE_RESIST_II 1909
+#define SPELL_ACTING_FIRE_SHIELD 1910
+#define SPELL_ACTING_POISON_SHIELD 1911
+#define SPELL_ACTING_COLD_SHIELD 1912
+#define SPELL_ACTING_DISEASE_SHIELD 1913
+#define SPELL_ACTING_ARMOR_I 1914
+#define SPELL_ACTING_ARMOR_II 1915
+#define SPELL_ACTING_ARMOR_III 1916
+#define SPELL_ACTING_HEALTH_I 1917
+#define SPELL_ACTING_HEALTH_II 1918
+#define SPELL_ACTING_HEALTH_III 1919
+#define SPELL_ACTING_HEALTH_IV 1920
+#define SPELL_ACTING_SPIRIT_I 1921
+#define SPELL_ACTING_SPIRIT_II 1922
+#define SPELL_RESURRECTION_SICKNESS 756
+#define SPELL_RESURRECTION_SICKNESS2 5249
+#define SPELL_REVIVAL_SICKNESS 13087
+
 
 
 #define EFFECT_COUNT 12
@@ -606,7 +730,7 @@ typedef enum {
 #define SE_LimitSpellGroup				385	// implemented - Limits to spell group(ie type 3 reuse reduction augs that are class specific and thus all share s SG)
 #define SE_CastOnCurer					386 // implemented - Casts a spell on the person curing
 #define SE_CastOnCure					387 // implemented - Casts a spell on the cured person
-//#define SE_SummonCorpseZone			388 // *not implemented - summons a corpse from any zone(nec AA)
+#define SE_SummonCorpseZone				388 // implemented - summons a corpse from any zone(nec AA)
 #define SE_FcTimerRefresh				389 // implemented - Refresh spell icons
 //#define SE_FcTimerLockout				390 // *not implemented - Sets recast timers to specific value, focus limited.
 #define SE_LimitManaMax					391	// implemented
@@ -633,7 +757,7 @@ typedef enum {
 #define SE_LimitRace					412 // implemented - Limits to spells cast by a certain race (Note: not used in any known live spells)
 #define SE_FcBaseEffects				413 // implemented - Increases the power of bard songs, skill attacks, runes, bard allowed foci, damage/heal
 #define SE_LimitCastingSkill			414 // implemented - Limit a focus to include spells cast using a specific skill.
-//#define SE_FFItemClass				415 // not used
+//#define SE_FFItemClass				415 // not used - base1 matches ItemType, base2 matches SubType, -1 ignored, max is bitmask of valid slots
 #define SE_ACv2							416 // implemented - New AC spell effect
 #define SE_ManaRegen_v2					417 // implemented - New mana regen effect
 #define SE_SkillDamageAmount2			418 // implemented - adds skill damage directly to certain attacks
@@ -678,18 +802,73 @@ typedef enum {
 #define SE_ResourceTap					457 // implemented  Coverts a percent of dmg from dmg spells(DD/DoT) to hp/mana/end.
 #define SE_FactionModPct				458 // implemented  Modifies faction gains and losses by percent.
 #define SE_DamageModifier2				459 // implemented - Modifies melee damage by skill type
-//#define SE_Ff_Override_NotFocusable	460 // 
+//#define SE_Ff_Override_NotFocusable	460 //
 #define SE_ImprovedDamage2				461 // implemented - Increase spell damage by percent (SE_Fc_Damage_%2)
-#define SE_FcDamageAmt2					462 // implemented - Increase spell damage by flat amount (SE_Fc_Damage_Amt2)	
-//#define SE_Shield_Target				463 // 
+#define SE_FcDamageAmt2					462 // implemented - Increase spell damage by flat amount (SE_Fc_Damage_Amt2)
+//#define SE_Shield_Target				463 //
 #define SE_PC_Pet_Rampage				464 // implemented - Base1 % chance to do rampage for base2 % of damage each melee round
 //#define SE_PC_Pet_AE_Rampage			465 // Would assume as above but need to confirm.
 #define SE_PC_Pet_Flurry_Chance			466 // implemented - Base1 % chance to do flurry from double attack hit.
-//#define SE_DS_Mitigation_Amount		467 // 
-//#define SE_DS_Mitigation_Percentage	468 // 
-//#define SE_Chance_Best_in_Spell_Grp   469 //  
-//#define SE_Trigger_Best_in_Spell Grp  470 // 
-//#define SE_Double_Melee_Round			471 // 
+#define SE_DS_Mitigation_Amount			467 // implemented - Modify incoming damage shield damage by a flat amount
+#define SE_DS_Mitigation_Percentage		468 // implemented - Modify incoming damage shield damage by percentage
+//#define SE_Chance_Best_in_Spell_Grp   469 //
+//#define SE_Trigger_Best_in_Spell Grp  470 //
+//#define SE_Double_Melee_Round			471 //
+//#define SE_Buy_AA_Rank				472 //
+#define SE_Double_Backstab_Front		473 // implemented - Chance to double backstab from front
+//#define SE_Pet_Crit_Melee_Damage_Pct_Owner	474 //
+//#define SE_Trigger_Spell_Non_Item		475 //
+//#define SE_Weapon_Stance				476 //
+//#define SE_Hatelist_To_Top_Index		477 //
+//#define SE_Hatelist_To_Tail_Index		478 //
+//#define SE_Ff_Value_Min				479 //
+//#define SE_Ff_Value_Max				480 //
+//#define SE_Fc_Cast_Spell_On_Land		481 //
+//#define SE_Skill_Base_Damage_Mod		482 //
+//#define SE_Fc_Spell_Damage_Pct_IncomingPC	483 //
+//#define SE_Fc_Spell_Damage_Amt_IncomingPC	484 //
+//#define SE_Ff_CasterClass				485 //
+//#define SE_Ff_Same_Caster				486 //
+//#define SE_Extend_Tradeskill_Cap		487 //
+//#define SE_Defender_Melee_Force_Pct_PC	488 //
+//#define SE_Worn_Endurance_Regen_Cap	489 //
+//#define SE_Ff_ReuseTimeMin			490 //
+//#define SE_Ff_ReuseTimeMax			491 //
+//#define SE_Ff_Endurance_Min			492 //
+//#define SE_Ff_Endurance_Max			493 //
+//#define SE_Pet_Add_Atk				494 //
+//#define SE_Ff_DurationMax				495 //
+#define SE_Critical_Melee_Damage_Mod_Max	496 // implemented - increase or decrease by percent critical damage (not stackable)
+//#define SE_Ff_FocusCastProcNoBypass	497 //
+//#define SE_AddExtraAttackPct_1h_Primary	498 //
+//#define SE_AddExtraAttackPct_1h_Secondary	499 //
+//#define SE_Fc_CastTimeMod2			500 //
+//#define SE_Fc_CastTimeAmt				501 //
+//#define SE_Fearstun					502 //
+#define SE_Melee_Damage_Position_Mod	503 // implemented - modify melee damage by pct if done from Front or Behind
+//#define SE_Melee_Damage_Position_Amt	504 //
+#define SE_Damage_Taken_Position_Mod	505 // implemented - mitigate melee damage by pct if dmg taken from Front or Behind
+//#define SE_Damage_Taken_Position_Amt	506 //
+//#define SE_Fc_Amplify_Mod				507 //
+//#define SE_Fc_Amplify_Amt				508 //
+#define SE_Health_Transfer				509 // implemented - exchange health for damage or healing on a target. ie Lifeburn/Act of Valor
+//#define SE_Fc_ResistIncoming			510 //
+//#define SE_Ff_FocusTimerMin			511 //
+//#define SE_Proc_Timer_Modifier 		512 //
+//#define SE_Mana_Max_Percent			513 //
+//#define SE_Endurance_Max_Percent		514 //
+#define SE_AC_Avoidance_Max_Percent		515 // implemented - stackable avoidance modifier
+#define SE_AC_Mitigation_Max_Percent	516 // implemented - stackable defense modifier
+//#define SE_Attack_Offense_Max_Percent	517 // 
+#define SE_Attack_Accuracy_Max_Percent	518 // implemented - stackable accurary modifer
+//#define SE_Luck_Amount				519 //
+//#define SE_Luck_Percent				520 //
+#define SE_Endurance_Absorb_Pct_Damage	521 // implemented - Reduces % of Damage using Endurance, drains endurance at a ratio (ie. 0.05 Endurance per Hit Point)
+#define SE_Instant_Mana_Pct				522 // implemented - Increase/Decrease mana by percent of max mana
+#define SE_Instant_Endurance_Pct		523 // implemented - Increase/Decrease mana by percent of max endurance
+#define SE_Duration_HP_Pct				524 // implemented - Decrease Current Hit Points by % of Total Hit Points per Tick, up to a MAX per tick
+#define SE_Duration_Mana_Pct			525 // implemented - Decrease Current Mana by % of Total Mana per Tick, up to a MAX per tick
+#define SE_Duration_Endurance_Pct		526 // implemented - Decrease Current Endurance by % of Total Hit Points per Tick, up to a MAX per tick
 
 
 // LAST
@@ -747,7 +926,7 @@ struct SPDat_Spell_Struct
 /* 086 */	int effectid[EFFECT_COUNT];	// Spell's effects -- SPELLAFFECT1 ... SPELLAFFECT12
 /* 098 */	SpellTargetType targettype;	// Spell's Target -- TYPENUMBER
 /* 099 */	int basediff; // base difficulty fizzle adjustment -- BASEDIFFICULTY
-/* 100 */	EQEmu::skills::SkillType skill; // -- CASTINGSKILL
+/* 100 */	EQ::skills::SkillType skill; // -- CASTINGSKILL
 /* 101 */	int8 zonetype; // 01=Outdoors, 02=dungeons, ff=Any -- ZONETYPE
 /* 102 */	int8 EnvironmentType; // -- ENVIRONMENTTYPE
 /* 103 */	int8 TimeOfDay; // -- TIMEOFDAY
@@ -757,11 +936,11 @@ struct SPDat_Spell_Struct
 /* 122 */	//uint32 TravelType; // -- TRAVELTYPE
 /* 123 */	uint16 SpellAffectIndex; // -- SPELLAFFECTINDEX
 /* 124 */	int8 disallow_sit; // 124: high-end Yaulp spells (V, VI, VII, VIII [Rk 1, 2, & 3], & Gallenite's Bark of Fury -- CANCELONSIT
-/* 125 */	int8 diety_agnostic;// 125: Words of the Skeptic -- DIETY_AGNOSTIC
+/* 125 */	int8 deity_agnostic;// 125: Words of the Skeptic -- DEITY_AGNOSTIC
 /* 126 */	int8 deities[16];	// Deity check. 201 - 216 per http://www.eqemulator.net/wiki/wikka.php?wakka=DeityList
 										// -1: Restrict to Deity; 1: Restrict to Deity, but only used on non-Live (Test Server "Blessing of ...") spells; 0: Don't restrict
 										// the client actually stores deities in a single int32_t
-										// -- DIETY_BERTOXXULOUS ... DIETY_VEESHAN
+										// -- DEITY_BERTOXXULOUS ... DEITY_VEESHAN
 /* 142 */	//int8 npc_no_cast;			// 142: between 0 & 100 -- NPC_NO_CAST
 /* 143 */	//int ai_pt_bonus;			// 143: always set to 0, client doesn't save this -- AI_PT_BONUS
 /* 144 */	int16 new_icon;	// Spell icon used by the client in uifiles/default/spells??.tga, both for spell gems & buff window. Looks to depreciate icon & memicon -- NEW_ICON
@@ -980,6 +1159,6 @@ uint32 GetNimbusEffect(uint16 spell_id);
 int32 GetFuriousBash(uint16 spell_id);
 bool IsShortDurationBuff(uint16 spell_id);
 bool IsSpellUsableThisZoneType(uint16 spell_id, uint8 zone_type);
-const char *GetSpellName(int16 spell_id);
+const char *GetSpellName(uint16 spell_id);
 
 #endif

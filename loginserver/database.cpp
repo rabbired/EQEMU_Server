@@ -395,15 +395,15 @@ Database::DbWorldRegistration Database::GetWorldRegistration(
 	world_registration.server_list_type        = std::stoi(row[3]);
 	world_registration.is_server_trusted       = std::stoi(row[2]) > 0;
 	world_registration.server_list_description = row[4];
+	world_registration.server_admin_id         = std::stoi(row[5]);
 
-	int db_account_id = std::stoi(row[5]);
-	if (db_account_id <= 0) {
+	if (world_registration.server_admin_id <= 0) {
 		return world_registration;
 	}
 
 	auto world_registration_query = fmt::format(
 		"SELECT account_name, account_password FROM login_server_admins WHERE id = {0} LIMIT 1",
-		db_account_id
+		world_registration.server_admin_id
 	);
 
 	auto world_registration_results = QueryDatabase(world_registration_query);
@@ -471,6 +471,47 @@ void Database::UpdateWorldRegistration(unsigned int id, std::string long_name, s
 	);
 
 	QueryDatabase(query);
+}
+
+/**
+ * @param id
+ * @param admin_account_password_hash
+ */
+bool Database::UpdateLoginWorldAdminAccountPassword(
+	unsigned int id,
+	const std::string &admin_account_password_hash
+)
+{
+	auto results = QueryDatabase(
+		fmt::format(
+			"UPDATE login_server_admins SET account_password = '{}' WHERE id = {}",
+			EscapeString(admin_account_password_hash),
+			id
+		)
+	);
+
+	return results.Success();
+}
+
+/**
+ *
+ * @param admin_account_username
+ * @param admin_account_password_hash
+ */
+bool Database::UpdateLoginWorldAdminAccountPasswordByUsername(
+	const std::string &admin_account_username,
+	const std::string &admin_account_password_hash
+)
+{
+	auto results = QueryDatabase(
+		fmt::format(
+			"UPDATE login_server_admins SET account_password = '{}' WHERE account_name = '{}'",
+			EscapeString(admin_account_password_hash),
+			EscapeString(admin_account_username)
+		)
+	);
+
+	return results.Success();
 }
 
 /**
@@ -555,95 +596,6 @@ std::string Database::CreateLoginserverApiToken(
 MySQLRequestResult Database::GetLoginserverApiTokens()
 {
 	return QueryDatabase("SELECT token, can_write, can_read FROM login_api_tokens");
-}
-
-/**
- * @param log_settings
- */
-void Database::LoadLogSettings(EQEmuLogSys::LogSettings *log_settings)
-{
-	std::string query =
-					"SELECT "
-					"log_category_id, "
-					"log_category_description, "
-					"log_to_console, "
-					"log_to_file, "
-					"log_to_gmsay "
-					"FROM "
-					"logsys_categories "
-					"ORDER BY log_category_id";
-
-	auto results         = QueryDatabase(query);
-	int  log_category_id = 0;
-
-	int *categories_in_database = new int[1000];
-
-	for (auto row = results.begin(); row != results.end(); ++row) {
-		log_category_id = atoi(row[0]);
-		if (log_category_id <= Logs::None || log_category_id >= Logs::MaxCategoryID) {
-			continue;
-		}
-
-		log_settings[log_category_id].log_to_console = static_cast<uint8>(atoi(row[2]));
-		log_settings[log_category_id].log_to_file    = static_cast<uint8>(atoi(row[3]));
-		log_settings[log_category_id].log_to_gmsay   = static_cast<uint8>(atoi(row[4]));
-
-		/**
-		 * Determine if any output method is enabled for the category
-		 * and set it to 1 so it can used to check if category is enabled
-		 */
-		const bool log_to_console      = log_settings[log_category_id].log_to_console > 0;
-		const bool log_to_file         = log_settings[log_category_id].log_to_file > 0;
-		const bool log_to_gmsay        = log_settings[log_category_id].log_to_gmsay > 0;
-		const bool is_category_enabled = log_to_console || log_to_file || log_to_gmsay;
-
-		if (is_category_enabled) {
-			log_settings[log_category_id].is_category_enabled = 1;
-		}
-
-		/**
-		 * This determines whether or not the process needs to actually file log anything.
-		 * If we go through this whole loop and nothing is set to any debug level, there is no point to create a file or keep anything open
-		 */
-		if (log_settings[log_category_id].log_to_file > 0) {
-			LogSys.file_logs_enabled = true;
-		}
-
-		categories_in_database[log_category_id] = 1;
-	}
-
-	/**
-	 * Auto inject categories that don't exist in the database...
-	 */
-	for (int log_index = Logs::AA; log_index != Logs::MaxCategoryID; log_index++) {
-		if (categories_in_database[log_index] != 1) {
-
-			LogInfo(
-				"New Log Category [{0}] doesn't exist... Automatically adding to [logsys_categories] table...",
-				Logs::LogCategoryName[log_index]
-			);
-
-			auto inject_query = fmt::format(
-				"INSERT INTO logsys_categories "
-				"(log_category_id, "
-				"log_category_description, "
-				"log_to_console, "
-				"log_to_file, "
-				"log_to_gmsay) "
-				"VALUES "
-				"({0}, '{1}', {2}, {3}, {4})",
-				log_index,
-				EscapeString(Logs::LogCategoryName[log_index]),
-				std::to_string(log_settings[log_index].log_to_console),
-				std::to_string(log_settings[log_index].log_to_file),
-				std::to_string(log_settings[log_index].log_to_gmsay)
-			);
-
-			QueryDatabase(inject_query);
-		}
-	}
-
-	delete[] categories_in_database;
 }
 
 /**

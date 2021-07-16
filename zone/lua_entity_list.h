@@ -7,6 +7,9 @@
 class EntityList;
 class Lua_Mob;
 class Lua_Client;
+#ifdef BOTS
+class Lua_Bot;
+#endif
 class Lua_NPC;
 class Lua_Door;
 class Lua_Corpse;
@@ -16,6 +19,9 @@ class Lua_Raid;
 class Lua_Spawn;
 struct Lua_Mob_List;
 struct Lua_Client_List;
+#ifdef BOTS
+struct Lua_Bot_List;
+#endif
 struct Lua_NPC_List;
 struct Lua_Corpse_List;
 struct Lua_Object_List;
@@ -34,6 +40,10 @@ luabind::scope lua_register_corpse_list();
 luabind::scope lua_register_object_list();
 luabind::scope lua_register_door_list();
 luabind::scope lua_register_spawn_list();
+
+#ifdef BOTS
+luabind::scope lua_register_bot_list();
+#endif
 
 class Lua_EntityList : public Lua_Ptr<EntityList>
 {
@@ -54,6 +64,7 @@ public:
 	bool IsMobSpawnedByNpcTypeID(int npc_type);
 	Lua_NPC GetNPCByID(int id);
 	Lua_NPC GetNPCByNPCTypeID(int npc_type);
+	Lua_NPC GetNPCBySpawnID(uint32 spawn_id);
 	Lua_Client GetClientByName(const char *name);
 	Lua_Client GetClientByAccID(uint32 acct_id);
 	Lua_Client GetClientByID(int id);
@@ -109,6 +120,11 @@ public:
 	Lua_Spawn_List GetSpawnList();
 	void SignalAllClients(int signal);
 	void ChannelMessage(Lua_Mob from, int channel_num, int language, const char *message);
+#ifdef BOTS
+	Lua_Bot GetBotByID(uint32 bot_id);
+	Lua_Bot GetBotByName(std::string bot_name);
+	Lua_Bot_List GetBotList();
+#endif
 };
 
 #endif

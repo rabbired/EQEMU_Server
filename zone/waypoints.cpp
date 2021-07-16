@@ -118,7 +118,7 @@ void NPC::ResumeWandering()
 		{	// we were paused by a quest
 			AI_walking_timer->Disable();
 			SetGrid(0 - GetGrid());
-			if (cur_wp == EQEmu::WaypointStatus::QuestControlGrid)
+			if (cur_wp == EQ::WaypointStatus::QuestControlGrid)
 			{	// got here by a MoveTo()
 				cur_wp = save_wp;
 				UpdateWaypoint(cur_wp);	// have him head to last destination from here
@@ -159,7 +159,7 @@ void NPC::PauseWandering(int pausetime)
 	if (GetGrid() != 0) {
 		moving = false;
 		DistractedFromGrid = true;
-		LogPathing("Paused Wandering requested. Grid [{}]. Resuming in [{}] ms (0=not until told)", GetGrid(), pausetime);
+		LogPathing("Paused Wandering requested. Grid [{}]. Resuming in [{}] seconds (0=not until told)", GetGrid(), pausetime);
 		StopNavigation();
 		if (pausetime < 1) {	// negative grid number stops him dead in his tracks until ResumeWandering()
 			SetGrid(0 - GetGrid());
@@ -184,7 +184,7 @@ void NPC::MoveTo(const glm::vec4 &position, bool saveguardspot)
 		AI_walking_timer->Disable();    // disable timer in case he is paused at a wp
 		if (cur_wp >= 0) {    // we've not already done a MoveTo()
 			save_wp = cur_wp;    // save the current waypoint
-			cur_wp  = EQEmu::WaypointStatus::QuestControlGrid;
+			cur_wp  = EQ::WaypointStatus::QuestControlGrid;
 		}
 		LogAI("MoveTo [{}], pausing regular grid wandering. Grid [{}], save_wp [{}]",
 			to_string(static_cast<glm::vec3>(position)).c_str(),
@@ -194,7 +194,7 @@ void NPC::MoveTo(const glm::vec4 &position, bool saveguardspot)
 	else {    // not on a grid
 		roamer  = true;
 		save_wp = 0;
-		cur_wp  = EQEmu::WaypointStatus::QuestControlNoGrid;
+		cur_wp  = EQ::WaypointStatus::QuestControlNoGrid;
 		LogAI("MoveTo [{}] without a grid", to_string(static_cast<glm::vec3>(position)).c_str());
 	}
 
@@ -244,14 +244,14 @@ void NPC::CalculateNewWaypoint()
 	int old_wp = cur_wp;
 	bool reached_end = false;
 	bool reached_beginning = false;
-	if (cur_wp == max_wp)
+	if (cur_wp == max_wp - 1) //cur_wp starts at 0, max_wp starts at 1.
 		reached_end = true;
 	if (cur_wp == 0)
 		reached_beginning = true;
 
 	switch (wandertype)
 	{
-	case 0: //circle
+	case GridCircular:
 	{
 		if (reached_end)
 			cur_wp = 0;
@@ -259,10 +259,10 @@ void NPC::CalculateNewWaypoint()
 			cur_wp = cur_wp + 1;
 		break;
 	}
-	case 1: //10 closest
+	case GridRandom10:
 	{
 		std::list<wplist> closest;
-		GetClosestWaypoint(closest, 10, glm::vec3(GetPosition()));
+		GetClosestWaypoints(closest, 10, glm::vec3(GetPosition()));
 		auto iter = closest.begin();
 		if (closest.size() != 0)
 		{
@@ -273,30 +273,63 @@ void NPC::CalculateNewWaypoint()
 
 		break;
 	}
-	case 2: //random
+	case GridRandom:
+	case GridCenterPoint:
 	{
-		cur_wp = zone->random.Int(0, Waypoints.size() - 1);
-		if (cur_wp == old_wp)
+		if (wandertype == GridCenterPoint && !reached_beginning)
 		{
-			if (cur_wp == (Waypoints.size() - 1))
+			cur_wp = 0;
+		}
+		else
+		{
+			cur_wp = zone->random.Int(0, Waypoints.size() - 1);
+			if (cur_wp == old_wp || (wandertype == GridCenterPoint && cur_wp == 0))
 			{
-				if (cur_wp > 0)
+				if (cur_wp == (Waypoints.size() - 1))
 				{
-					cur_wp--;
+					if (cur_wp > 0)
+					{
+						cur_wp--;
+					}
 				}
-			}
-			else if (cur_wp == 0)
-			{
-				if ((Waypoints.size() - 1) > 0)
+				else if (cur_wp == 0)
 				{
-					cur_wp++;
+					if ((Waypoints.size() - 1) > 0)
+					{
+						cur_wp++;
+					}
 				}
 			}
 		}
 
 		break;
 	}
-	case 3: //patrol
+	case GridRandomCenterPoint:
+	{
+		bool on_center = Waypoints[cur_wp].centerpoint;
+		std::vector<wplist> random_waypoints;
+		for (auto &wpl : Waypoints)
+		{
+			if (wpl.index != cur_wp &&
+				((on_center && !wpl.centerpoint) || (!on_center && wpl.centerpoint)))
+			{
+				random_waypoints.push_back(wpl);
+			}
+		}
+
+		if (random_waypoints.size() == 0)
+		{
+			cur_wp = 0;
+		}
+		else
+		{
+			int windex = zone->random.Roll0(random_waypoints.size());
+			cur_wp = random_waypoints[windex].index;
+		}
+
+		break;
+	}
+	case GridPatrol:
 	{
 		if (reached_end)
 			patrol = 1;
@@ -309,16 +342,16 @@ void NPC::CalculateNewWaypoint()
 
 		break;
 	}
-	case 4: //goto the end and depop with spawn timer
-	case 6: //goto the end and depop without spawn timer
+	case GridOneWayRepop:
+	case GridOneWayDepop:
 	{
 		cur_wp = cur_wp + 1;
 		break;
 	}
-	case 5: //pick random closest 5 and pick one that's in sight
+	case GridRand5LoS:
 	{
 		std::list<wplist> closest;
-		GetClosestWaypoint(closest, 5, glm::vec3(GetPosition()));
+		GetClosestWaypoints(closest, 5, glm::vec3(GetPosition()));
 
 		auto iter = closest.begin();
 		while (iter != closest.end())
@@ -341,6 +374,64 @@ void NPC::CalculateNewWaypoint()
 		}
 		break;
 	}
+	case GridRandomPath: // randomly select a waypoint but follow path to it instead of walk directly to it ignoring walls
+	{
+		if (Waypoints.size() == 0)
+		{
+			cur_wp = 0;
+		}
+		else
+		{
+			if (cur_wp == patrol) // reutilizing patrol member instead of making new member for this wander type; here we use it to save a random waypoint
+			{
+				if (!Waypoints[cur_wp].centerpoint)
+				{
+					// if we have arrived at a waypoint that is NOT a centerpoint, then check for the existence of any centerpoint waypoint
+					// if any exists then randomly go to it otherwise go to one that exist.
+					std::vector<wplist> random_centerpoints;
+					for (auto& wpl : Waypoints)
+					{
+						if (wpl.index != cur_wp && wpl.centerpoint)
+						{
+							random_centerpoints.push_back(wpl);
+						}
+					}
+
+					if (random_centerpoints.size() == 1)
+					{
+						patrol = random_centerpoints[0].index;
+						break;
+					}
+					else if (random_centerpoints.size() > 1)
+					{
+						int windex = zone->random.Roll0(random_centerpoints.size());
+						patrol = random_centerpoints[windex].index;
+						break;
+					}
+				}
+
+				while (patrol == cur_wp)
+				{
+					// Setting a negative number in pause of the select waypoints will NOT be included in the group of waypoints to be random.
+					// This will cause the NPC to not stop and pause in any of the waypoints that is not part of random waypoints.
+					std::vector<wplist> random_waypoints;
+					for (auto& wpl : Waypoints)
+					{
+						if (wpl.index != cur_wp && wpl.pause >= 0 && !wpl.centerpoint)
+						{
+							random_waypoints.push_back(wpl);
+						}
+					}
+					int windex = zone->random.Roll0(random_waypoints.size());
+					patrol = random_waypoints[windex].index;
+				}
+			}
+			if (patrol > cur_wp)
+				cur_wp = cur_wp + 1;
+			else
+				cur_wp = cur_wp - 1;
+		}
+	}
 	}
 
 	// Preserve waypoint setting for quest controlled NPCs
@@ -357,7 +448,30 @@ bool wp_distance_pred(const wp_distance& left, const wp_distance& right)
 	return left.dist < right.dist;
 }
 
-void NPC::GetClosestWaypoint(std::list<wplist> &wp_list, int count, const glm::vec3& location)
+int NPC::GetClosestWaypoint(const glm::vec3& location)
+{
+	if (Waypoints.size() <= 1)
+		return 0;
+
+	int closest = 0;
+	float closestDist = 9999999.0f;
+	float dist;
+
+	for (int i = 0; i < Waypoints.size(); ++i)
+	{
+		dist = DistanceSquared(location, glm::vec3(Waypoints[i].x, Waypoints[i].y, Waypoints[i].z));
+
+		if (dist < closestDist)
+		{
+			closestDist = dist;
+			closest = i;
+		}
+	}
+	return closest;
+}
+
+// fills wp_list with the closest count number of waypoints
+void NPC::GetClosestWaypoints(std::list<wplist> &wp_list, int count, const glm::vec3& location)
 {
 	wp_list.clear();
 	if (Waypoints.size() <= count)
@@ -485,68 +599,69 @@ void Mob::StopNavigation() {
 	mMovementManager->StopNavigation(this);
 }
 
-void NPC::AssignWaypoints(int32 grid)
+void NPC::AssignWaypoints(int32 grid_id, int start_wp)
 {
-	if (grid == 0)
+	if (grid_id == 0)
 		return; // grid ID 0 not supported
 
-	if (grid < 0) {
+	if (grid_id < 0) {
 		// Allow setting negative grid values for pausing pathing
-		this->CastToNPC()->SetGrid(grid);
+		this->CastToNPC()->SetGrid(grid_id);
 		return;
 	}
 
 	Waypoints.clear();
 	roamer = false;
 
-	// Retrieve the wander and pause types for this grid
-	std::string query = StringFormat("SELECT `type`, `type2` FROM `grid` WHERE `id` = %i AND `zoneid` = %i", grid,
-		zone->GetZoneID());
-	auto results = database.QueryDatabase(query);
-	if (!results.Success()) {
+	auto grid_entry = GridRepository::GetGrid(zone->zone_grids, grid_id);
+	if (grid_entry.id == 0) {
 		return;
 	}
 
-	if (results.RowCount() == 0)
-		return;
+	wandertype = grid_entry.type;
+	pausetype  = grid_entry.type2;
 
-	auto row = results.begin();
-
-	wandertype = atoi(row[0]);
-	pausetype = atoi(row[1]);
-
-	SetGrid(grid);	// Assign grid number
-
-					// Retrieve all waypoints for this grid
-	query = StringFormat("SELECT `x`,`y`,`z`,`pause`,`heading` "
-		"FROM grid_entries WHERE `gridid` = %i AND `zoneid` = %i "
-		"ORDER BY `number`", grid, zone->GetZoneID());
-	results = database.QueryDatabase(query);
-	if (!results.Success()) {
-		return;
-	}
+	SetGrid(grid_id);	// Assign grid number
 
 	roamer = true;
 	max_wp = 0;	// Initialize it; will increment it for each waypoint successfully added to the list
 
-	for (auto row = results.begin(); row != results.end(); ++row, ++max_wp)
-	{
-		wplist newwp;
-		newwp.index = max_wp;
-		newwp.x = atof(row[0]);
-		newwp.y = atof(row[1]);
-		newwp.z = atof(row[2]);
+	for (auto &entry : zone->zone_grid_entries) {
+		if (entry.gridid == grid_id) {
+			wplist new_waypoint{};
+			new_waypoint.index       = max_wp;
+			new_waypoint.x           = entry.x;
+			new_waypoint.y           = entry.y;
+			new_waypoint.z           = entry.z;
+			new_waypoint.pause       = entry.pause;
+			new_waypoint.heading     = entry.heading;
+			new_waypoint.centerpoint = entry.centerpoint;
 
-		newwp.pause = atoi(row[3]);
-		newwp.heading = atof(row[4]);
-		Waypoints.push_back(newwp);
+			LogPathing(
+				"Loading Grid [{}] number [{}] name [{}]",
+				grid_id,
+				entry.number,
+				GetCleanName()
+			);
+
+			Waypoints.push_back(new_waypoint);
+			max_wp++;
+		}
 	}
 
-	UpdateWaypoint(0);
+	cur_wp = start_wp;
+	UpdateWaypoint(start_wp);
 	SetWaypointPause();
 
-	if (wandertype == 1 || wandertype == 2 || wandertype == 5)
+	if (wandertype == GridRandomPath) {
+		cur_wp = GetClosestWaypoint(glm::vec3(GetPosition()));
+		patrol = cur_wp;
+	}
+
+	if (wandertype == GridRandom10 || wandertype == GridRandom || wandertype == GridRand5LoS) {
 		CalculateNewWaypoint();
+	}
+
 }
 
 void Mob::SendTo(float new_x, float new_y, float new_z) {
@@ -653,7 +768,7 @@ void Mob::FixZ(int32 z_find_offset /*= 5*/, bool fix_client_z /*= false*/) {
 	if (IsClient() && !fix_client_z) {
 		return;
 	}
-	
+
 	if (flymode == GravityBehavior::Flying) {
 		return;
 	}
@@ -687,7 +802,7 @@ void Mob::FixZ(int32 z_find_offset /*= 5*/, bool fix_client_z /*= false*/) {
 float Mob::GetZOffset() const {
 	float offset = 3.125f;
 
-	switch (race) {
+	switch (GetModel()) {
 		case RACE_BASILISK_436:
 			offset = 0.577f;
 			break;
@@ -914,11 +1029,29 @@ void ZoneDatabase::ModifyGrid(Client *client, bool remove, uint32 id, uint8 type
 		return;
 	}
 
-	std::string query = StringFormat("DELETE FROM grid where id=%i", id);
+	std::string query = StringFormat("DELETE FROM grid where id=%i and zoneid=%i", id, zoneid);
 	auto results = QueryDatabase(query);
 
 	query = StringFormat("DELETE FROM grid_entries WHERE zoneid = %i AND gridid = %i", zoneid, id);
 	results = QueryDatabase(query);
+}
+
+bool ZoneDatabase::GridExistsInZone(uint32 zone_id, uint32 grid_id) {
+	bool grid_exists = false;
+	std::string query = fmt::format(
+		"SELECT * FROM `grid` WHERE `id` = {} AND `zoneid` = {}",
+		grid_id,
+		zone_id
+	);
+	auto results = QueryDatabase(query);
+	if (!results.Success()) {
+		return grid_exists;
+	}
+
+	if (results.RowCount() == 1) {
+		grid_exists = true;
+	}
+	return grid_exists;
 }
 
 /**************************************
@@ -1056,6 +1189,37 @@ int ZoneDatabase::GetHighestWaypoint(uint32 zoneid, uint32 gridid) {
 
 	auto row = results.begin();
 	return atoi(row[0]);
+}
+
+int ZoneDatabase::GetRandomWaypointLocFromGrid(glm::vec4 &loc, uint16 zoneid, int grid)
+{
+	loc.x = loc.y = loc.z = loc.w = 0.0f;
+
+	std::string query = StringFormat("SELECT `x`,`y`,`z`,`heading` "
+		"FROM grid_entries WHERE `gridid` = %i AND `zoneid` = %u ORDER BY `number`", grid, zone->GetZoneID());
+	auto results = content_db.QueryDatabase(query);
+	if (!results.Success()) {
+		Log(Logs::General, Logs::Error, "MySQL Error while trying get random waypoint loc from grid %i in zoneid %u;  %s", grid, zoneid, results.ErrorMessage().c_str());
+		return 0;
+	}
+
+	if (results.RowCount() > 0)
+	{
+		int roll = zone->random.Int(0, results.RowCount() - 1);
+		int i = 0;
+		auto row = results.begin();
+		while (i < roll)
+		{
+			row++;
+			i++;
+		}
+		loc.x = atof(row[0]);
+		loc.y = atof(row[1]);
+		loc.z = atof(row[2]);
+		loc.w = atof(row[3]);
+		return i;
+	}
+	return 0;
 }
 
 void NPC::SaveGuardSpotCharm()

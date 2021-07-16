@@ -48,7 +48,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 namespace Convert {
 	struct BindStruct {
-		/*000*/ uint32 zoneId;
+		/*000*/ uint32 zone_id;
 		/*004*/ float x;
 		/*008*/ float y;
 		/*012*/ float z;
@@ -189,7 +189,7 @@ namespace Convert {
 		/*002*/	uint32 HP;
 		/*006*/	uint32 Mana;
 		/*010*/	Convert::SpellBuff_Struct Buffs[BUFF_COUNT];
-		/*510*/	uint32 Items[EQEmu::textures::materialCount];
+		/*510*/	uint32 Items[EQ::textures::materialCount];
 		/*546*/	char Name[64];
 		/*610*/
 	};
@@ -230,9 +230,9 @@ namespace Convert {
 		/*0304*/	uint8							ability_time_minutes;
 		/*0305*/	uint8							ability_time_hours;	//place holder
 		/*0306*/	uint8							unknown0306[6];		// @bp Spacer/Flag?
-		/*0312*/	uint32							item_material[EQEmu::textures::materialCount];	// Item texture/material of worn/held items
+		/*0312*/	uint32							item_material[EQ::textures::materialCount];	// Item texture/material of worn/held items
 		/*0348*/	uint8							unknown0348[44];
-		/*0392*/	Convert::Color_Struct			item_tint[EQEmu::textures::materialCount];
+		/*0392*/	Convert::Color_Struct			item_tint[EQ::textures::materialCount];
 		/*0428*/	Convert::AA_Array				aa_array[MAX_PP_AA_ARRAY];
 		/*2348*/	float							unknown2384;		//seen ~128, ~47
 		/*2352*/	char							servername[32];		// length probably not right
@@ -1320,18 +1320,18 @@ bool Database::CheckDatabaseConvertPPDeblob(){
 				if (rquery != ""){ results = QueryDatabase(rquery); }
 
 				/* Run Bind Home Convert */
-				if (pp->binds[4].zoneId < 999 && !_ISNAN_(pp->binds[4].x) && !_ISNAN_(pp->binds[4].y) && !_ISNAN_(pp->binds[4].z) && !_ISNAN_(pp->binds[4].heading)) {
+				if (pp->binds[4].zone_id < 999 && !_ISNAN_(pp->binds[4].x) && !_ISNAN_(pp->binds[4].y) && !_ISNAN_(pp->binds[4].z) && !_ISNAN_(pp->binds[4].heading)) {
 					rquery = StringFormat("REPLACE INTO `character_bind` (id, zone_id, instance_id, x, y, z, heading, is_home)"
 						" VALUES (%u, %u, %u, %f, %f, %f, %f, 1)",
-						character_id, pp->binds[4].zoneId, 0, pp->binds[4].x, pp->binds[4].y, pp->binds[4].z, pp->binds[4].heading);
+						character_id, pp->binds[4].zone_id, 0, pp->binds[4].x, pp->binds[4].y, pp->binds[4].z, pp->binds[4].heading);
 					if (rquery != ""){ results = QueryDatabase(rquery); }
 				}
 
 				/* Run Bind Convert */
-				if (pp->binds[0].zoneId < 999 && !_ISNAN_(pp->binds[0].x) && !_ISNAN_(pp->binds[0].y) && !_ISNAN_(pp->binds[0].z) && !_ISNAN_(pp->binds[0].heading)) {
+				if (pp->binds[0].zone_id < 999 && !_ISNAN_(pp->binds[0].x) && !_ISNAN_(pp->binds[0].y) && !_ISNAN_(pp->binds[0].z) && !_ISNAN_(pp->binds[0].heading)) {
 					rquery = StringFormat("REPLACE INTO `character_bind` (id, zone_id, instance_id, x, y, z, heading, is_home)"
 						" VALUES (%u, %u, %u, %f, %f, %f, %f, 0)",
-						character_id, pp->binds[0].zoneId, 0, pp->binds[0].x, pp->binds[0].y, pp->binds[0].z, pp->binds[0].heading);
+						character_id, pp->binds[0].zone_id, 0, pp->binds[0].x, pp->binds[0].y, pp->binds[0].z, pp->binds[0].heading);
 					if (rquery != ""){ results = QueryDatabase(rquery); }
 				}
 				/* Run Language Convert */
@@ -1396,7 +1396,7 @@ bool Database::CheckDatabaseConvertPPDeblob(){
 				if (rquery != ""){ results = QueryDatabase(rquery); }
 				/* Run Material Color Convert */
 				first_entry = 0; rquery = "";
-				for (i = EQEmu::textures::textureBegin; i < EQEmu::textures::materialCount; i++){
+				for (i = EQ::textures::textureBegin; i < EQ::textures::materialCount; i++){
 					if (pp->item_tint[i].color > 0){
 						if (first_entry != 1){
 							rquery = StringFormat("REPLACE INTO `character_material` (id, slot, blue, green, red, use_tint, color) VALUES (%u, %u, %u, %u, %u, %u, %u)", character_id, i, pp->item_tint[i].rgb.blue, pp->item_tint[i].rgb.green, pp->item_tint[i].rgb.red, pp->item_tint[i].rgb.use_tint, pp->item_tint[i].color);

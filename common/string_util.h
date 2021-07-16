@@ -27,16 +27,68 @@
 #include <fmt/format.h>
 #endif
 
+#ifdef _WINDOWS
+#include <ctype.h>
+#include <functional>
+#include <algorithm>
+#endif
+
 #include "types.h"
 
 //std::string based
 const std::string str_tolower(std::string s);
 const std::string str_toupper(std::string s);
 const std::string ucfirst(std::string s);
-std::vector<std::string> split(std::string str_to_split, char delimiter);
 const std::string StringFormat(const char* format, ...);
 const std::string vStringFormat(const char* format, va_list args);
+std::vector<std::string> wrap(std::vector<std::string> &src, std::string character);
 std::string implode(std::string glue, std::vector<std::string> src);
+std::string convert2digit(int n, std::string suffix);
+std::string numberToWords(unsigned long long int n);
+
+// For converstion of numerics into English
+// Used for grid nodes, as NPC names remove numerals.
+// But general purpose
+
+const std::string NUM_TO_ENGLISH_X[] = { "", "One ", "Two ", "Three ", "Four ",
+				"Five ", "Six ", "Seven ", "Eight ", "Nine ", "Ten ", "Eleven ",
+				"Twelve ", "Thirteen ", "Fourteen ", "Fifteen ",
+				"Sixteen ", "Seventeen ", "Eighteen ", "Nineteen " };
+
+const std::string NUM_TO_ENGLISH_Y[] = { "", "", "Twenty ", "Thirty ", "Forty ",
+				"Fifty ", "Sixty ", "Seventy ", "Eighty ", "Ninety " };
+
+/**
+ * @param str
+ * @param chars
+ * @return
+ */
+inline std::string &ltrim(std::string &str, const std::string &chars = "\t\n\v\f\r ")
+{
+	str.erase(0, str.find_first_not_of(chars));
+	return str;
+}
+
+/**
+ * @param str
+ * @param chars
+ * @return
+ */
+inline std::string &rtrim(std::string &str, const std::string &chars = "\t\n\v\f\r ")
+{
+	str.erase(str.find_last_not_of(chars) + 1);
+	return str;
+}
+
+/**
+ * @param str
+ * @param chars
+ * @return
+ */
+inline std::string &trim(std::string &str, const std::string &chars = "\t\n\v\f\r ")
+{
+	return ltrim(rtrim(str, chars), chars);
+}
 
 template <typename T>
 std::string implode(const std::string &glue, const std::pair<char, char> &encapsulation, const std::vector<T> &src)
@@ -46,14 +98,14 @@ std::string implode(const std::string &glue, const std::pair<char, char> &encaps
 	}
 
 	std::ostringstream oss;
-	
+
 	for (const T &src_iter : src) {
 		oss << encapsulation.first << src_iter << encapsulation.second << glue;
 	}
 
 	std::string output(oss.str());
 	output.resize(output.size() - glue.size());
-	
+
 	return output;
 }
 
@@ -69,7 +121,7 @@ std::vector<std::string> join_pair(const std::string &glue, const std::pair<char
 
 	for (const std::pair<T1, T2> &src_iter : src) {
 		output.push_back(
-			
+
 			fmt::format(
 				"{}{}{}{}{}{}{}",
 				encapsulation.first,
@@ -99,7 +151,7 @@ std::vector<std::string> join_tuple(const std::string &glue, const std::pair<cha
 	for (const std::tuple<T1, T2, T3, T4> &src_iter : src) {
 
 		output.push_back(
-			
+
 			fmt::format(
 				"{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
 				encapsulation.first,
@@ -124,7 +176,8 @@ std::vector<std::string> join_tuple(const std::string &glue, const std::pair<cha
 	return output;
 }
 
-std::vector<std::string> SplitString(const std::string &s, char delim);
+std::vector<std::string> SplitString(const std::string &s, const char delim = ',');
+std::string::size_type search_deliminated_string(const std::string &haystack, const std::string &needle, const char deliminator = ',');
 std::string EscapeString(const char *src, size_t sz);
 std::string EscapeString(const std::string &s);
 bool StringIsNumber(const std::string &s);
@@ -145,11 +198,25 @@ char* strn0cpy(char* dest, const char* source, uint32 size);
 const char *ConvertArray(int input, char *returnchar);
 const char *ConvertArrayF(float input, char *returnchar);
 const char *MakeLowerString(const char *source);
-int MakeAnyLenString(char** ret, const char* format, ...);
-uint32 AppendAnyLenString(char** ret, uint32* bufsize, uint32* strlen, const char* format, ...);
 uint32 hextoi(const char* num);
 uint64 hextoi64(const char* num);
 void MakeLowerString(const char *source, char *target);
 void RemoveApostrophes(std::string &s);
+std::string convert2digit(int n, std::string suffix);
+std::string numberToWords(unsigned long long int n);
+std::string FormatName(const std::string& char_name);
+
+template<typename InputIterator, typename OutputIterator>
+auto CleanMobName(InputIterator first, InputIterator last, OutputIterator result)
+{
+    for (; first != last; ++first) {
+        if(*first == '_') {
+            *result = ' ';
+        } else if (isalpha(*first) || *first == '`') {
+            *result = *first;
+        }
+    }
+    return result;
+}
 
 #endif
