@@ -1,0 +1,35 @@
+# 作者：Goooler
+# 链接：https://www.zhihu.com/question/28676261/answer/1828601410
+# 来源：知乎
+# 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+name: Merge upstream
+
+on:
+  # 推送代码后触发
+  push:
+  # 定时任务触发，使用 cron 规则，这里默认一小时执行一次
+  schedule:
+    - cron: '0 * * * *'
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Merge upstream
+        run: |
+          # 使用自己的用户名替换 username
+          git config --global user.name 'rabbired'
+          git config --global user.email 'rabbired@users.noreply.github.com'
+
+          git pull --unshallow
+
+          # 自行替换要同步的上游仓库地址
+          git remote add upstream https://github.com/EQEmu/Server.git
+          git fetch upstream
+
+          # 可以自定义要同步的分支
+          git checkout -b master origin/master
+          git merge --no-edit upstream/master
+          git push origin master
