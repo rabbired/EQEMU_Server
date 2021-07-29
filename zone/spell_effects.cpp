@@ -3214,6 +3214,7 @@ bool Mob::SpellEffect(Mob* caster, uint16 spell_id, float partial, int level_ove
 			case SE_Fc_Cast_Spell_On_Land:
 			case SE_Ff_CasterClass:
 			case SE_Ff_Same_Caster:
+			case SE_Skill_Base_Damage_Mod:
 			{
 				break;
 			}
@@ -4811,7 +4812,7 @@ int16 Client::CalcAAFocus(focusType type, const AA::Rank &rank, uint16 spell_id)
 			break;
 
 		case SE_FcTwincast:
-			if (type == focusTwincast)
+			if (type == focusTwincast && !IsEffectInSpell(spell_id, SE_TwinCastBlocker))
 				value = base1;
 			break;
 
@@ -5381,7 +5382,7 @@ int16 Mob::CalcFocusEffect(focusType type, uint16 focus_id, uint16 spell_id, boo
 			break;
 
 		case SE_FcTwincast:
-			if (type == focusTwincast)
+			if (type == focusTwincast && !IsEffectInSpell(spell_id, SE_TwinCastBlocker))
 				value = focus_spell.base[i];
 			break;
 
