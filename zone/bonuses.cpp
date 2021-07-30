@@ -860,9 +860,6 @@ void Mob::ApplyAABonuses(const AA::Rank &rank, StatBonuses *newbon)
 		case SE_MaxBindWound:
 			newbon->MaxBindWound += base1;
 			break;
-		case SE_ExtraAttackChance:
-			newbon->ExtraAttackChance += base1;
-			break;
 		case SE_SeeInvis:
 			newbon->SeeInvis = base1;
 			break;
@@ -984,7 +981,6 @@ void Mob::ApplyAABonuses(const AA::Rank &rank, StatBonuses *newbon)
 		case SE_BlockBehind:
 			newbon->BlockBehind += base1;
 			break;
-
 		case SE_StrikeThrough:
 		case SE_StrikeThrough2:
 			newbon->StrikeThrough += base1;
@@ -1572,6 +1568,34 @@ void Mob::ApplyAABonuses(const AA::Rank &rank, StatBonuses *newbon)
 			newbon->Pet_Add_Atk += base1;
 			break;
 
+		case SE_ExtraAttackChance:
+		{
+			if (newbon->ExtraAttackChance[0] < base1) {
+				newbon->ExtraAttackChance[0] = base1;
+				newbon->ExtraAttackChance[1] = base2 ? base2 : 1;
+			}
+			break;
+		}
+
+		case SE_AddExtraAttackPct_1h_Primary:
+		{
+			if (newbon->ExtraAttackChancePrimary[0] < base1) {
+				newbon->ExtraAttackChancePrimary[0] = base1;
+				newbon->ExtraAttackChancePrimary[1] = base2 ? base2 : 1;
+			}
+			break;
+		}
+
+		case SE_AddExtraAttackPct_1h_Secondary:
+		{
+
+			if (newbon->ExtraAttackChanceSecondary[0] < base1) {
+				newbon->ExtraAttackChanceSecondary[0] = base1;
+				newbon->ExtraAttackChanceSecondary[1] = base2 ? base2 : 1;
+			}
+			break;
+		}
+
 		// to do
 		case SE_PetDiscipline:
 			break;
@@ -1726,7 +1750,9 @@ void Mob::ApplySpellsBonuses(uint16 spell_id, uint8 casterlevel, StatBonuses *ne
 
 			case SE_ChangeFrenzyRad:
 			{
-				// redundant to have level check here
+				if (max != 0 && GetLevel() > max)
+					break;
+
 				if(new_bonus->AggroRange == -1 || effect_value < new_bonus->AggroRange)
 				{
 					new_bonus->AggroRange = static_cast<float>(effect_value);
@@ -1736,6 +1762,8 @@ void Mob::ApplySpellsBonuses(uint16 spell_id, uint8 casterlevel, StatBonuses *ne
 
 			case SE_Harmony:
 			{
+				if (max != 0 && GetLevel() > max)
+					break;
 				// Harmony effect as buff - kinda tricky
 				// harmony could stack with a lull spell, which has better aggro range
 				// take the one with less range in any case
@@ -2382,8 +2410,45 @@ void Mob::ApplySpellsBonuses(uint16 spell_id, uint8 casterlevel, StatBonuses *ne
 			}
 
 			case SE_ExtraAttackChance:
-				new_bonus->ExtraAttackChance += effect_value;
+			{
+				if (AdditiveWornBonus) {
+					new_bonus->ExtraAttackChance[0] += effect_value;
+					new_bonus->ExtraAttackChance[1] = base2 ? base2 : 1;
+				}
+				if (new_bonus->ExtraAttackChance[0] < effect_value) {
+					new_bonus->ExtraAttackChance[0] = effect_value;
+					new_bonus->ExtraAttackChance[1] = base2 ? base2 : 1;
+				}
 				break;
+			}
+
+			case SE_AddExtraAttackPct_1h_Primary:
+			{
+				if (AdditiveWornBonus) {
+					new_bonus->ExtraAttackChancePrimary[0] += effect_value;
+					new_bonus->ExtraAttackChancePrimary[1] = base2 ? base2 : 1;
+				}
+
+				if (new_bonus->ExtraAttackChancePrimary[0] < effect_value) {
+					new_bonus->ExtraAttackChancePrimary[0] = effect_value;
+					new_bonus->ExtraAttackChancePrimary[1] = base2 ? base2 : 1;
+				}
+				break;
+			}
+
+			case SE_AddExtraAttackPct_1h_Secondary:
+			{
+				if (AdditiveWornBonus) {
+					new_bonus->ExtraAttackChanceSecondary[0] += effect_value;
+					new_bonus->ExtraAttackChanceSecondary[1] = base2 ? base2 : 1;
+				}
+
+				if (new_bonus->ExtraAttackChanceSecondary[0] < effect_value) {
+					new_bonus->ExtraAttackChanceSecondary[0] = effect_value;
+					new_bonus->ExtraAttackChanceSecondary[1] = base2 ? base2 : 1;
+				}
+				break;
+			}
 
 			case SE_PercentXPIncrease:
 			{
@@ -4302,9 +4367,21 @@ void Mob::NegateSpellsBonuses(uint16 spell_id)
 					break;
 
 				case SE_ExtraAttackChance:
-					spellbonuses.ExtraAttackChance = effect_value;
-					aabonuses.ExtraAttackChance = effect_value;
-					itembonuses.ExtraAttackChance = effect_value;
+					spellbonuses.ExtraAttackChance[0] = effect_value;
+					aabonuses.ExtraAttackChance[0] = effect_value;
+					itembonuses.ExtraAttackChance[0] = effect_value;
+					break;
+
+				case SE_AddExtraAttackPct_1h_Primary:
+					spellbonuses.ExtraAttackChancePrimary[0] = effect_value;
+					aabonuses.ExtraAttackChancePrimary[0] = effect_value;
+					itembonuses.ExtraAttackChancePrimary[0] = effect_value;
+					break;
+
+				case SE_AddExtraAttackPct_1h_Secondary:
+					spellbonuses.ExtraAttackChanceSecondary[0] = effect_value;
+					aabonuses.ExtraAttackChanceSecondary[0] = effect_value;
+					itembonuses.ExtraAttackChanceSecondary[0] = effect_value;
 					break;
 
 				case SE_PercentXPIncrease:
