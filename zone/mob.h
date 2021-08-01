@@ -349,7 +349,6 @@ public:
 	bool TrySpellProjectile(Mob* spell_target,  uint16 spell_id, float speed = 1.5f);
 	void ResourceTap(int32 damage, uint16 spell_id);
 	void TryTriggerThreshHold(int32 damage, int effect_id, Mob* attacker);
-	bool CheckSpellCategory(uint16 spell_id, int category_id, int effect_id);
 	void CalcDestFromHeading(float heading, float distance, float MaxZDiff, float StartX, float StartY, float &dX, float &dY, float &dZ);
 	void BeamDirectional(uint16 spell_id, int16 resist_adjust);
 	void ConeDirectional(uint16 spell_id, int16 resist_adjust);
@@ -791,8 +790,8 @@ public:
 	bool TryDeathSave();
 	bool TryDivineSave();
 	void DoBuffWearOffEffect(uint32 index);
-	void TryTriggerOnCast(uint32 spell_id, bool aa_trigger);
-	void TriggerOnCast(uint32 focus_spell, uint32 spell_id, bool aa_trigger);
+	void TryTriggerOnCastFocusEffect(focusType type, uint16 spell_id);
+	bool TryTriggerOnCastProc(uint16 focusspellid, uint16 spell_id, uint16 proc_spellid);
 	bool TrySpellTrigger(Mob *target, uint32 spell_id, int effect);
 	void TryTriggerOnValueAmount(bool IsHP = false, bool IsMana = false, bool IsEndur = false, bool IsPet = false);
 	void TryTwincast(Mob *caster, Mob *target, uint32 spell_id);
