@@ -22,8 +22,6 @@
 #define SEE_POSITION 0.5f	//ratio of GetSize() where NPCs try to see for LOS
 #define CHECK_LOS_STEP 1.0f
 
-#define MAX_SHIELDERS 2		//I dont know if this is based on a client limit
-
 #define ARCHETYPE_HYBRID	1
 #define ARCHETYPE_CASTER	2
 #define ARCHETYPE_MELEE		3
@@ -109,6 +107,8 @@
 #define WEAPON_STANCE_TYPE_MAX 2
 
 
+#define SHIELD_ABILITY_RECAST_TIME 180
+
 typedef enum {	//focus types
 	focusSpellHaste = 1,				//@Fc, SPA: 127, SE_IncreaseSpellHaste,				On Caster, cast time mod pct, base: pct
 	focusSpellDuration,					//@Fc, SPA: 128, SE_IncreaseSpellDuration,			On Caster, spell duration mod pct, base: pct
@@ -143,7 +143,8 @@ typedef enum {	//focus types
 	focusIncreaseNumHits,				//@Fc, SPA: 421, SE_FcIncreaseNumHits,				On Caster, numhits mod flat amt, base: amt
 	focusFcLimitUse,					//@Fc, SPA: 420, SE_FcLimitUse,						On Caster, numhits mod pct, base: pct
 	focusFcMute,						//@Fc, SPA: 357, SE_FcMute,							On Caster, prevents spell casting, base: chance pct
-	focusFcTimerRefresh,				//@Fc, SPA: 389, SE_FcTimerRefresh,					On Caster, reset all recast timers, base: 1
+	focusFcTimerRefresh,				//@Fc, SPA: 389, SE_FcTimerRefresh,					On Caster, reset spell recast timer, base: 1
+	focusFcTimerLockout,				//@Fc, SPA: 390, SE_FcTimerLockout,					On Caster, set a spell to be on recast timer, base: recast duration milliseconds
 	focusFcStunTimeMod,					//@Fc, SPA: 133, SE_FcStunTimeMod,					On Caster, stun time mod pct, base: chance pct
 	focusFcResistIncoming,				//@Fc, SPA: 510, SE_Fc_Resist_Incoming,				On Target, resist modifier, base: amt
 	focusFcAmplifyMod,					//@Fc, SPA: 507, SE_Fc_Amplify_Mod,					On Caster, damage-heal-dot mod pct, base: pct
@@ -553,8 +554,11 @@ struct StatBonuses {
 	int32	ItemEnduranceRegenCap;				// modify endurance regen cap
 	int32   WeaponStance[WEAPON_STANCE_TYPE_MAX +1];// base = trigger spell id, base2 = 0 is 2h, 1 is shield, 2 is dual wield, [0]spid 2h, [1]spid shield, [2]spid DW
 
+
 	// AAs
-	int8	Packrat;							//weight reduction for items, 1 point = 10%
+	int32	ShieldDuration;						// extends duration of /shield ability
+	int32	ExtendedShielding;					// extends range of /shield ability
+	int8	Packrat;							// weight reduction for items, 1 point = 10%
 	uint8	BuffSlotIncrease;					// Increases number of available buff slots
 	uint32	DelayDeath;							// how far below 0 hp you can go
 	int8	BaseMovementSpeed;					// Adjust base run speed, does not stack with other movement bonuses.
@@ -685,10 +689,6 @@ typedef struct
 	int level_override;
 } tProc;
 
-struct Shielders_Struct {
-	uint32 shielder_id;
-	uint16 shielder_bonus;
-};
 
 struct WeaponStance_Struct {
 	bool enabled;
